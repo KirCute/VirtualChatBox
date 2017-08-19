@@ -1,3 +1,4 @@
+import os
 from mcpi import minecraft
 from mcpi import block
 
@@ -151,104 +152,157 @@ blockDictionary = {
     "minecraft:nether_reactor_core": block.NETHER_REACTOR_CORE
 }
 
+
+def setting(args):
+    if not (len(args) == 0 or len(args) == 2):
+        invalid()
+    else:
+        if len(args) == 0:
+            print "autojump, nametags_visible, world_immutable"
+        else:
+            if args[1] == "true":
+                setting = True
+            elif args[1] == "false":
+                setting = False
+            else:
+                invalid()
+                return
+            if args[0] == "autojump":
+                mc.player.setting("autojump", setting)
+            elif args[0] == "nametags_visible":
+                mc.setting("nametags_visible", setting)
+            elif args[0] == "world_immutable":
+                mc.setting("world_immutable", setting)
+            else:
+                invalid()
+                return
+            mc.postToChat("Changed the " + args[0] + " setting to " + args[1])
+
+def clear(args):
+    if not (len(args) == 0):
+        invalid()
+    else:
+        os.system("clear")
+
+
 def help(args):
     if not (len(args) == 1 or len(args) == 0):
         invalid()
     else:
         list = True
-        if(len(args) == 0):
-             page = 1
-        else:
-            try:
+        try:
+            if len(args) == 0:
+                page = 1
+            else:
                 page = int(args[0])
-                if page > helpPageCount:
-                    page = helpPageCount
-                elif page < 1:
-                    page = 1
-            except ValueError:
-                list = False
-                if args[0] == "say":
-                    print '\033[0;33;0m'
-                    print "say:"
-                    print "Sends a message in the chat to other players."
-                    print '\033[0m'
-                    print "Usage:"
-                    print "- /say <message: string>"
-                elif args[0] == "tp":
-                    print '\033[0;33;0m'
-                    print "tp:"
-                    print "Teleports player."
-                    print '\033[0m'
-                    print "Usage:"
-                    print "- /tp <destination: x y z>"
-                elif args[0] == "me":
-                    print '\033[0;33;0m'
-                    print "me:"
-                    print "Makes an action to others."
-                    print '\033[0m'
-                    print "Usage:"
-                    print "- /me <action: string>"
-                elif args[0] == "setblock":
-                    print '\033[0;33;0m'
-                    print "setblock:"
-                    print "Changes a block to another block."
-                    print '\033[0m'
-                    print "Usages:"
-                    print "- /setblock <position: x y z> <tileName: string> [tileData: int]"
-                    print "- /setblock <position: x y z> <tileId: int> [tileData: int]"
-                elif args[0] == "fill" or args[0] == "setblocks":
-                    print '\033[0;33;0m'
-                    print "fill(setblocks):"
-                    print "Fills all of a region with a specific block."
-                    print '\033[0m'
-                    print "Usage:"
-                    print "- /fill <from: x y z> <to: x y z> <tileName: string> [tileData: int]"
-                    print "- /fill <from: x y z> <to: x y z> <tileId: int> [tileData: int]"
-                elif args[0] == "help" or "?":
-                    print '\033[0;33;0m'
-                    print "help:"
-                    print "Provides help/list of commands."
-                    print '\033[0m'
-                    print "Usage:"
-                    print "- /help <command: string>"
-                    print "- /help [page: int]"
-                elif args[0] == "setplayername":
-                    print '\033[0;33;0m'
-                    print "setplayername:"
-                    print "Changes the player's name to another name."
-                    print '\033[0m'
-                    print "Usage:"
-                    print "- /setplayername [newPlayerName: string]"
-                else:
-                    print '\033[0;31;0m'
-                    print "The command is defined."
-                    print '\033[0m'
+            if page > helpPageCount:
+                page = helpPageCount
+            elif page < 1:
+                page = 1
+        except ValueError:
+            list = False
+            if args[0] == "say":
+                print '\033[0;33;40m',
+                print "say:"
+                print " Sends a message in the chat to other players."
+                print '\033[0m',
+                print "Usage:"
+                print " - /say <message: string>"
+            elif args[0] == "tp":
+                print '\033[0;33;40m',
+                print "tp:"
+                print " Teleports player."
+                print '\033[0m',
+                print "Usage:"
+                print " - /tp <destination: x y z>"
+            elif args[0] == "me":
+                print '\033[0;33;40m',
+                print "me:"
+                print " Makes an action to others."
+                print '\033[0m',
+                print "Usage:"
+                print " - /me <action: string>"
+            elif args[0] == "setblock":
+                print '\033[0;33;40m',
+                print "setblock:"
+                print " Changes a block to another block."
+                print '\033[0m',
+                print "Usages:"
+                print " - /setblock <position: x y z> <tileName: string> [tileData: int]"
+                print " - /setblock <position: x y z> <tileId: int> [tileData: int]"
+            elif args[0] == "fill" or args[0] == "setblocks":
+                print '\033[0;33;40m',
+                print "fill(setblocks):"
+                print " Fills all of a region with a specific block."
+                print '\033[0m',
+                print "Usage:"
+                print " - /fill <from: x y z> <to: x y z> <tileName: string> [tileData: int]"
+                print " - /fill <from: x y z> <to: x y z> <tileId: int> [tileData: int]"
+            elif args[0] == "help":
+                print '\033[0;33;40m',
+                print "help:"
+                print " Provides help/list of commands."
+                print '\033[0m',
+                print "Usage:"
+                print " - /help <command: string>"
+                print " - /help [page: int]"
+            elif args[0] == "setplayername":
+                print '\033[0;33;40m',
+                print "setplayername:"
+                print " Changes the player's name to another name."
+                print '\033[0m',
+                print "Usage:"
+                print " - /setplayername [newPlayerName: string]"
+            elif args[0] == "clear":
+                print '\033[0;33;40m',
+                print "clear:"
+                print " Clears the screen of terminal."
+                print '\033[0m',
+                print "Usage:"
+                print " - /clear"
+            elif args[0] == "setting":
+                print '\033[0;33;40m',
+                print "setting:"
+                print " Set a setting."
+                print '\033[0m',
+                print "Usage:"
+                print " - /setting"
+                print " - /setting <setting: string> <status: boolean>"
+            else:
+                print '\033[0;31;40m',
+                print "The command is defined.",
+                print '\033[0m'
         if list:
-            print '\033[0;32;0m'
+            print '\033[0;32;40m',
             print "--- Showing help page " + str(page) + " of " + str(helpPageCount) + " (/help <page>) ---"
-            print '\033[0m'
+            print '\033[0m',
             if page == 1:
-                print "/fill <from: x y z> <to: x y z> <tileName: string> [tileData: int]"
-                print "/fill <from: x y z> <to: x y z> <tileId: int> [tileData: int]"
-                print "/help <command: string>"
-                print "/help [page: int]"
-                print "/me <action: string>"
-                print "/say <message: string>"
-                print "/setblock <position: x y z> <tileName: string> [tileData: int]"
+                print "/clear"
+                print " /fill <from: x y z> <to: x y z> <tileName: string> [tileData: int]"
+                print " /fill <from: x y z> <to: x y z> <tileId: int> [tileData: int]"
+                print " /help <command: string>"
+                print " /help [page: int]"
+                print " /me <action: string>"
+                print " /say <message: string>"
             elif page == 2:
-                print "/setblock <position: x y z> <tileId: int> [tileData: int]"
-                print "/setplayername [newPlayerName: string]"
-                print "/tp <destination: x y z>"
+                print "/setblock <position: x y z> <tileName: string> [tileData: int]"
+                print " /setblock <position: x y z> <tileId: int> [tileData: int]"
+                print " /setplayername [newPlayerName: string]"
+                print " /setting"
+                print " /setting <setting: string> <status: boolean>"
+                print " /tp <destination: x y z>"
+
 
 def setplayername(args):
     if not (len(args) == 1 or len(args) == 0):
         invalid()
     else:
+        global playerName
         if(len(args) == 1):
             playerName = args[0]
         else:
             playerName = "Player"
-        mc.postToChat("Player's name changed successfully")
+        mc.postToChat("Player's name changed to \"" + playerName + "\" successfully")
 
 
 def say(args):
@@ -275,7 +329,7 @@ def teleport(args):
     if not (len(args) == 3):
         invalid()
     else:
-        vec = getvec(args[0], args[1], args[2])
+        vec = getvec(args[0], args[1], args[2], True)
         if not vec:
             return
         else:
@@ -287,7 +341,7 @@ def setblock(args):
     if not (len(args) == 4 or len(args) == 5):
         invalid()
     else:
-        vec = getvec(args[0], args[1], args[2])
+        vec = getvec(args[0], args[1], args[2], False)
         if not vec:
             return
         else:
@@ -299,41 +353,39 @@ def setblock(args):
                 special = 0
             if args[3] in blockDictionary.keys():
                 mc.setBlock(int(vec[0]), int(vec[1]), int(vec[2]), blockDictionary[args[3]], special)
-                mc.postToChat("Block placed")
             else:
                 blockId = toint(args[3], 0, 256)
                 if blockId == -1:
                     return
                 mc.setBlock(int(vec[0]), int(vec[1]), int(vec[2]), block.Block(blockId), special)
-                mc.postToChat("Block placed")
+            mc.postToChat("Block placed")
 
 
 def fill(args):
     if not (len(args) == 7 or len(args) == 8):
         invalid()
     else:
-        vecB = getvec(args[0], args[1], args[2])
-        if vecB == False:
+        vecB = getvec(args[0], args[1], args[2], False)
+        if not vecB:
             return
-        vecE = getvec(args[3], args[4], args[5])
-        if vecE == False:
+        vecE = getvec(args[3], args[4], args[5], False)
+        if not vecE:
             return
+        blockCount = (abs(vecB[0] - vecE[0]) + 1) * (abs(vecB[1] - vecE[1]) + 1) * (abs(vecB[2] - vecE[2]) + 1)
+        if (len(args) == 8):
+            special = toint(args[7], 0, 15)
+            if special == -1:
+                return
         else:
-            if (len(args) == 8):
-                special = toint(args[7], 0, 15)
-                if special == -1:
-                    return
-            else:
-                special = 0
-            if (args[6] in blockDictionary.keys()):
-                mc.setBlocks(int(vecB[0]), int(vecB[1]), int(vecB[2]), int(vecE[0]), int(vecE[1]), int(vecE[2]),
-                             blockDictionary[args[6]], special)
-            else:
-                blockId = toint(args[6], 0, 256)
-                if (blockId == -1):
-                    return
-                mc.setBlocks(int(vecB[0]), int(vecB[1]), int(vecB[2]), int(vecE[0]), int(vecE[1]), int(vecE[2]),
-                             block.Block(blockId), special)
+            special = 0
+        if (args[6] in blockDictionary.keys()):
+            mc.setBlocks(int(vecB[0]), int(vecB[1]), int(vecB[2]), int(vecE[0]), int(vecE[1]), int(vecE[2]), blockDictionary[args[6]], special)
+        else:
+            blockId = toint(args[6], 0, 256)
+            if (blockId == -1):
+                return
+            mc.setBlocks(int(vecB[0]), int(vecB[1]), int(vecB[2]), int(vecE[0]), int(vecE[1]), int(vecE[2]), block.Block(blockId), special)
+        mc.postToChat(str(blockCount) + " blocks filled")
 
 
 def switchcommand(args):
@@ -347,24 +399,36 @@ def switchcommand(args):
         setblock(args[1:])
     elif args[0] == "fill" or args[0] == "setblocks":
         fill(args[1:])
-    elif args[0] == "help" or "?":
+    elif args[0] == "help":
         help(args[1:])
     elif args[0] == "setplayername":
         setplayername(args[1:])
+    elif args[0] == "clear":
+        clear(args[1:])
+    elif args[0] == "setting":
+        setting(args[1:])
     else:
-        mc.postToChat("Unknown command. Try /help for a list of commands")
+        print '\033[0;31;40m',
+        print "Unknown command. Try /help for a list of commands",
+        print '\033[0m'
 
 
 def invalid():
-    mc.postToChat("Invalid command syntax")
+    print '\033[0;31;40m',
+    print "Invalid command syntax",
+    print '\033[0m'
 
 
 def toomin(num, min):
-    mc.postToChat("The number you have entered (" + str(num) + ") is too big, it must be at most " + str(max))
+    print '\033[0;31;40m',
+    print "The number you have entered (" + str(num) + ") is too big, it must be at most " + str(max),
+    print '\033[0m'
 
 
 def toomax(num, max):
-    mc.postToChat("The number you have entered (" + str(num) + ") is too small, it must be at least " + str(max))
+    print '\033[0;31;40m',
+    print "The number you have entered (" + str(num) + ") is too small, it must be at least " + str(max),
+    print '\033[0m'
 
 
 def toint(intStr, min, max):
@@ -379,59 +443,112 @@ def toint(intStr, min, max):
     except ValueError:
         invalid()
         return -1
+    return res
 
 
-def getvec(x, y, z):
-    vec = [0, 0, 0]
-    if x[0] == "~":
-        try:
-            if len(x) == 1:
-                add = 0
-            else:
-                add = float(x[1:])
-        except ValueError:
-            invalid()
-            return False
-        vec[0] = mc.player.getTilePos().x + add
+def getvec(x, y, z, isFloat):
+    if isFloat:
+        vec = [0, 0, 0]
+        if x[0] == "~":
+            try:
+                if len(x) == 1:
+                    add = 0
+                else:
+                    add = float(x[1:])
+            except ValueError:
+                invalid()
+                return False
+            vec[0] = mc.player.getTilePos().x + add
+        else:
+            try:
+                vec[0] = float(x)
+            except ValueError:
+                invalid()
+                return False
+        if y[0] == "~":
+            try:
+                if len(y) == 1:
+                    add = 0
+                else:
+                    add = float(y[1:])
+            except ValueError:
+                invalid()
+                return False
+            vec[1] = mc.player.getTilePos().y + add
+        else:
+            try:
+                vec[1] = float(y)
+            except ValueError:
+                invalid()
+                return False
+        if z[0] == "~":
+            try:
+                if len(z) == 1:
+                    add = 0
+                else:
+                    add = float(z[1:])
+            except ValueError:
+                invalid()
+                return False
+            vec[2] = mc.player.getTilePos().z + add
+        else:
+            try:
+                vec[2] = float(z)
+            except ValueError:
+                invalid()
+                return False
+        return vec
     else:
-        try:
-            vec[0] = float(x)
-        except ValueError:
-            invalid()
-            return False
-    if y[0] == "~":
-        try:
-            if len(y) == 1:
-                add = 0
-            else:
-                add = float(y[1:])
-        except ValueError:
-            invalid()
-            return False
-        vec[1] = mc.player.getTilePos().y + add
-    else:
-        try:
-            vec[1] = float(y)
-        except ValueError:
-            invalid()
-            return False
-    if z[0] == "~":
-        try:
-            if len(z) == 1:
-                add = 0
-            else:
-                add = float(z[1:])
-        except ValueError:
-            invalid()
-            return False
-        vec[2] = mc.player.getTilePos().z + add
-    else:
-        try:
-            vec[2] = float(z)
-        except ValueError:
-            invalid()
-            return False
-    return vec
+        vec = [0, 0, 0]
+        if x[0] == "~":
+            try:
+                if len(x) == 1:
+                    add = 0
+                else:
+                    add = int(x[1:])
+            except ValueError:
+                invalid()
+                return False
+            vec[0] = mc.player.getTilePos().x + add
+        else:
+            try:
+                vec[0] = int(x)
+            except ValueError:
+                invalid()
+                return False
+        if y[0] == "~":
+            try:
+                if len(y) == 1:
+                    add = 0
+                else:
+                    add = int(y[1:])
+            except ValueError:
+                invalid()
+                return False
+            vec[1] = mc.player.getTilePos().y + add
+        else:
+            try:
+                vec[1] = int(y)
+            except ValueError:
+                invalid()
+                return False
+        if z[0] == "~":
+            try:
+                if len(z) == 1:
+                    add = 0
+                else:
+                    add = int(z[1:])
+            except ValueError:
+                invalid()
+                return False
+            vec[2] = mc.player.getTilePos().z + add
+        else:
+            try:
+                vec[2] = int(z)
+            except ValueError:
+                invalid()
+                return False
+        return vec
 
 
 while True:
