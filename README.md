@@ -27,9 +27,9 @@ Let commands of Minecraft:Pi Edition easier.
 ## How can I exit?
   The Virtual Chat Box protected a way to exit back to your terminal: 
   When there is no something in your input box like this:
-> 
+ - > 
   Then press button "ESC", now you can see:
-> ^[
+ - > ^[
   Then press button "Enter". OK, exited successfully.
 
 ## What's more?
