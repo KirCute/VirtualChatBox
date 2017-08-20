@@ -13,8 +13,8 @@ Let commands of Minecraft:Pi Edition easier.
  - /setting         Set a setting.
  - /thread          Manages threads to do something looped in cycles.
  - /tp              Teleports player.
-... more add-ons' commands
-... more commands in the future
+ - ... more add-ons' commands
+ - ... more commands in the future
 
 ## How to use it ?
   It's easy to use it. Just download, cd to "src" dictionary, and enter "python VirtualChatBox.py" after you came in the game. Enter things you want to say, or enter command with "/" to use, commands' format is similar to minecraft java version. You can use "/help" to know more.
