@@ -28,13 +28,17 @@ Let commands of Minecraft:Pi Edition easier.
   The Virtual Chat Box protected a way to exit back to your terminal: 
   When there is no something in your input box like this:
 ```
- > 
+> 
 ```
   Then press button "ESC", now you can see:
 ```
- > ^[
+> ^[
 ```
-  Then press button "Enter". OK, exited successfully.
+  Then press button "Enter". OK, exited successfully:
+```
+> ^[
+pi@raspberry:~ $
+```
 
 ## What's more?
   More and more surprise in Virtual Chat Box! Download now and enjoy it. :)
