@@ -11,6 +11,7 @@ Let commands of Minecraft:Pi Edition easier.
  - /setblock        Changes a block to another block.
  - /setplayername   Changes the player's name for "/say", "/me" amd chating
  - /setting         Set a setting.
+ - /thread          Manages threads to do something looped in cycles.
  - /tp              Teleports player.
 ... more add-ons' commands
 ... more commands in the future
@@ -18,7 +19,18 @@ Let commands of Minecraft:Pi Edition easier.
 ## How to use it ?
   It's easy to use it. Just download, cd to "src" dictionary, and enter "python VirtualChatBox.py" after you came in the game. Enter things you want to say, or enter command with "/" to use, commands' format is similar to minecraft java version. You can use "/help" to know more.
 
-Besides, Virtual Chat Box support Minecraft - Stuff Library. Use "sudo pip install minecraftstuff" to get it. Then you can use its functions such as draw a circle. Add-ons' commands are in "/help", too.
+  Besides, Virtual Chat Box support Minecraft - Stuff Library. Use "sudo pip install minecraftstuff" to get it. Then you can use its functions such as draw a circle. Add-ons' commands are in "/help", too.
 
 ## Can I use "~" to get a relative position of player?
   Yes, no problem. It's one strengths of it. Use "~" for "/tp" and "/setblock", say goodbye to remembering locations.
+
+## How can I exit?
+  The Virtual Chat Box protected a way to exit back to your terminal: 
+  When there is no something in your input box like this:
+> 
+  Then press button "ESC", now you can see:
+> ^[
+  Then press button "Enter". OK, exited successfully.
+
+## What's more?
+  More and more surprise in Virtual Chat Box! Download now and enjoy it. :)

@@ -1,6 +1,8 @@
 import os
 import socket
 import sys
+import time
+import threading
 from mcpi import minecraft, block, vec3
 
 disablems = False
@@ -44,7 +46,8 @@ if not disablems:
     mcdraw = minecraftstuff.MinecraftDrawing(mc)
     mcshapes = {}
     mcturtles = {}
-helpPageCount = 3
+threads = {}
+helpPageCount = 4
 playerName = "Player"
 blockDictionary = {
     "air": block.AIR,
@@ -194,206 +197,381 @@ blockDictionary = {
 }
 
 
-def draw(args):
+def tocommand(args):
+    command = merge(args)
+    if command[1] == "/":
+        command = command[2:]
+    else:
+        command = command[1:]
+    return command
+
+
+def thread(args, super):
+    if len(args) == 0:
+        invalid(super)
+    elif args[0] == "add":
+        if len(args) < 4:
+            invalid(super)
+            return
+        name = args[1]
+        if len(name) == 0:
+            invalid(super)
+            return
+        if len(name) > 15:
+            if super is None:
+                print '\033[0;31;40m',
+                print "The name you have entered (" + name + ") is too long, it must be at longest 15",
+                print '\033[0m'
+                return
+            trystop(super)
+            chatWithSuper("The name you have entered (" + name + ") is too long, it must be at longest 15", super)
+            return
+        if name in threads.keys():
+            if super is None:
+                print '\033[0;31;40m',
+                print "Thread " + name + " already exists.",
+                print '\033[0m'
+                return
+            trystop(super)
+            chatWithSuper("Thread " + name + " already exists.", super)
+            return
+        sleep = toint(args[2], 0, 2147483647, super)
+        if sleep <= -1:
+            return
+        command = tocommand(args[3:])
+        if super is None:
+            threads[name] = CommandThread("t_" + name, command, float(sleep / 20))
+        else:
+            threads[name] = CommandThread(super + ".t_" + name, command, float(sleep / 20))
+        threads[name].start()
+        chatWithSuper("Created Thread " + name + " successfully.", super)
+    elif args[0] == "start":
+        if not len(args) == 2:
+            invalid(super)
+            return
+        name = args[1]
+        if not (name in threads.keys()):
+            chatWithSuper("Thread " + name + " doesn't exists.", super)
+            return
+        chatWithSuper("Thread " + name + " is running now.", super)
+        threads[name].continuethread()
+    elif args[0] == "stop":
+        if not len(args) == 2:
+            invalid(super)
+            return
+        name = args[1]
+        if not (name in threads.keys()):
+            chatWithSuper("Thread " + name + " doesn't exists.", super)
+            return
+        threads[name].setpause()
+        chatWithSuper("Thread " + name + " is stoped.", super)
+    elif args[0] == "remove":
+        if not len(args) == 2:
+            invalid(super)
+            return
+        name = args[1]
+        if not (name in threads.keys()):
+            chatWithSuper("Thread " + name + " doesn't exists.", super)
+            return
+        threads[name].stop()
+        del threads[name]
+        chatWithSuper("Removed Thread " + name + ".", super)
+    elif args[0] == "list":
+        if not (super is None):
+            trystop(super)
+            chatWithSuper("Cannot use /thread list in a function or a thread.", super)
+            return
+        print '\033[0;32;40m', "-------- Showing list of threads --------"
+        print " Thread Name     Status", '\033[0m'
+        for threadname in threads.keys():
+            print " " + threadname.ljust(15),
+            if threads[threadname].ispause():
+                print "Stoped"
+            else:
+                print "Running"
+    elif args[0] == "clear":
+        for name in threads.keys():
+            threads[name].stop()
+            del threads[name]
+        chatWithSuper("Cleared threads.", super)
+    elif args[0] == "setsleep":
+        if not (len(args) == 3):
+            invalid(super)
+            return
+        name = args[1]
+        if not (name in threads.keys()):
+            chatWithSuper("Thread " + name + " doesn't exists.", super)
+            return
+        sleep = toint(args[2], 0, 2147483647, super)
+        if sleep <= -1:
+            return
+        threads[name].setsleep(float(sleep / 20))
+    else:
+        invalid(super)
+
+
+def superoutput(super):
+    if "." in super:
+        threadname = super[2:super.find(".") + 1]
+        fun = superoutput(super[find(".") + 1:])
+        return threadname + "." + fun
+    else:
+        return super[2:]
+
+
+def trystop(super):
+    super = super + "."
+    if "t_" in super:
+        threads[super[super.rfind("t_") + 2 : super.find(".", super.rfind("t_"))]].setpause()
+
+
+def chatWithSuper(msg, super):
+    if super is None:
+        mc.postToChat(msg)
+    else:
+        mc.postToChat("[" + superoutput(super) + "] " + msg)
+
+
+class CommandThread(threading.Thread):
+    def __init__(self, name, command, sleep):
+        threading.Thread.__init__(self)
+        self.name = name
+        self.command = command
+        self.sleep = sleep
+        self.pause = True
+        self.delete = False
+
+    def run(self):
+        while not self.delete:
+            if not self.pause:
+                readCommand(self.command, self.name)
+                time.sleep(self.sleep)
+
+    def continuethread(self):
+        self.pause = False
+
+    def setpause(self):
+        self.pause = True
+
+    def setsleep(self, sleep):
+        self.sleep = sleep
+
+    def ispause(self):
+        return self.pause
+
+    def stop(self):
+        self.delete = True
+
+
+def draw(args, super):
     if disablems:
+        if not (super is None):
+            trystop(super)
+            chatWithSuper("Package \"minecraftstuff\" is defined, \"/draw\" is not available.", super)
+            return
         print '\033[0;33;40m',
         print "Package \"minecraftstuff\" is defined, \"/draw\" is not available.",
         print '\033[0m'
         return
     if len(args) == 0:
-        invalid()
+        invalid(super)
         return
     if args[0] == "circle":
         if not (len(args) == 6 or len(args) == 7):
-            invalid()
+            invalid(super)
             return
-        vec = getvec(args[1], args[2], args[3], False)
-        radius = toint(args[4], 0, 64)
-        if radius == -1:
+        vec = getvec(args[1], args[2], args[3], False, super)
+        radius = toint(args[4], 0, 64, super)
+        if radius <= -1:
             return
-        block = getblock(args[5])
-        if block == -1:
+        block = getblock(args[5], super)
+        if block <= -1:
             return
         if len(args) == 7:
-            special = toint(args[4], 0, 15)
-            if special == -1:
+            special = toint(args[4], 0, 15, super)
+            if special <= -1:
                 return
         else:
             special = 0
         mcdraw.drawCircle(vec[0], vec[1], vec[2], radius, block, special)
-        mc.postToChat("Drew circle successfully.")
+        chatWithSuper("Drew circle successfully.", super)
     elif args[0] == "face":
         blocklist = []
-        if len(args) >= 7 and not((len(args) - 4) % 3):
-            filled = tobool(args[-3])
-            if filled == -1:
+        if len(args) >= 7 and not ((len(args) - 4) % 3):
+            filled = tobool(args[-3], super)
+            if filled <= -1:
                 return
-            block = getblock(args[-2])
-            if block == -1:
+            block = getblock(args[-2], super)
+            if block <= -1:
                 return
-            special = toint(args[-1], 0, 15)
-            if special == -1:
+            special = toint(args[-1], 0, 15, super)
+            if special <= -1:
                 return
             times = (len(args) - 4) / 3
-        elif len(args) >= 6 and not((len(args) - 3) % 3):
-            filled = tobool(args[-2])
-            if filled == -1:
+        elif len(args) >= 6 and not ((len(args) - 3) % 3):
+            filled = tobool(args[-2], super)
+            if filled <= -1:
                 return
-            block = getblock(args[-1])
-            if block == -1:
+            block = getblock(args[-1], super)
+            if block <= -1:
                 return
             special = 0
             times = (len(args) - 3) / 3
         else:
-            invalid()
+            invalid(super)
             return
         time = 1
         while time <= times:
-            veclist = getvec(args[time * 3 - 2], args[time * 3 - 1], args[time * 3], False)
+            veclist = getvec(args[time * 3 - 2], args[time * 3 - 1], args[time * 3], False, super)
             if not veclist:
                 return
             blocklist.append(vec3.Vec3(veclist[0], veclist[1], veclist[2]))
             time += 1
         mcdraw.drawFace(blocklist, filled, block, special)
-        mc.postToChat("Drew face successfully.")
+        chatWithSuper("Drew face successfully.", super)
     elif args[0] == "hollowSphere":
         if not (len(args) == 6 or len(args) == 7):
-            invalid()
+            invalid(super)
             return
-        vec = getvec(args[1], args[2], args[3], False)
-        radius = toint(args[4], 0, 64)
-        if radius == -1:
+        vec = getvec(args[1], args[2], args[3], False, super)
+        radius = toint(args[4], 0, 64, super)
+        if radius <= -1:
             return
-        block = getblock(args[5])
-        if block == -1:
+        block = getblock(args[5], super)
+        if block <= -1:
             return
         if len(args) == 7:
-            special = toint(args[4], 0, 15)
-            if special == -1:
+            special = toint(args[4], 0, 15, super)
+            if special <= -1:
                 return
         else:
             special = 0
         mcdraw.drawHollowSphere(vec[0], vec[1], vec[2], radius, block, special)
-        mc.postToChat("Drew hollow sphere successfully.")
+        chatWithSuper("Drew hollow sphere successfully.", super)
     elif args[0] == "horizontalCircle":
         if not (len(args) == 6 or len(args) == 7):
-            invalid()
+            invalid(super)
             return
-        vec = getvec(args[1], args[2], args[3], False)
-        radius = toint(args[4], 0, 64)
-        if radius == -1:
+        vec = getvec(args[1], args[2], args[3], False, super)
+        radius = toint(args[4], 0, 64, super)
+        if radius <= -1:
             return
-        block = getblock(args[5])
-        if block == -1:
+        block = getblock(args[5], super)
+        if block <= -1:
             return
         if len(args) == 7:
-            special = toint(args[4], 0, 15)
-            if special == -1:
+            special = toint(args[4], 0, 15, super)
+            if special <= -1:
                 return
         else:
             special = 0
         mcdraw.drawHorizontalCircle(vec[0], vec[1], vec[2], radius, block, special)
-        mc.postToChat("Drew circle successfully.")
+        chatWithSuper("Drew circle successfully.", super)
     elif args[0] == "line":
-        if not(len(args) == 8 or len(args) == 9):
-            invalid()
+        if not (len(args) == 8 or len(args) == 9):
+            invalid(super)
             return
-        vecB = getvec(args[1], args[2], args[3], False)
+        vecB = getvec(args[1], args[2], args[3], False, super)
         if not vecB:
             return
-        vecE = getvec(args[4], args[5], args[6], False)
+        vecE = getvec(args[4], args[5], args[6], False, super)
         if not vecE:
             return
-        block = getblock(args[7])
-        if block == -1:
+        block = getblock(args[7], super)
+        if block <= -1:
             return
         if len(args) == 9:
-            special = toint(args[8], 0, 15)
-            if special == -1:
+            special = toint(args[8], 0, 15, super)
+            if special <= -1:
                 return
         else:
             special = 0
         mcdraw.drawLine(vecB[0], vecB[1], vecB[2], vecE[0], vecE[1], vecE[2], block, special)
-        mc.postToChat("Drew line successfully.")
+        chatWithSuper("Drew line successfully.", super)
     elif args[0] == "point":
         if not (len(args) == 5 or len(args) == 6):
-            invalid()
+            invalid(super)
         else:
-            vec = getvec(args[1], args[2], args[3], False)
+            vec = getvec(args[1], args[2], args[3], False, super)
             if not vec:
                 return
             else:
                 if len(args) == 6:
-                    special = toint(args[5], 0, 15)
-                    if special == -1:
+                    special = toint(args[5], 0, 15, super)
+                    if special <= -1:
                         return
                 else:
                     special = 0
-                block = getblock(args[4])
-                if block == -1:
+                block = getblock(args[4], super)
+                if block <= -1:
                     return
                 mc.setBlock(vec[0], vec[1], vec[2], block, special)
-                mc.postToChat("Drew point successfully.")
+                chatWithSuper("Drew point successfully.", super)
     elif args[0] == "sphere":
         if not (len(args) == 6 or len(args) == 7):
-            invalid()
+            invalid(super)
             return
-        vec = getvec(args[1], args[2], args[3], False)
-        radius = toint(args[4], 0, 64)
-        if radius == -1:
+        vec = getvec(args[1], args[2], args[3], False, super)
+        radius = toint(args[4], 0, 64, super)
+        if radius <= -1:
             return
-        block = getblock(args[5])
-        if block == -1:
+        block = getblock(args[5], super)
+        if block <= -1:
             return
         if len(args) == 7:
-            special = toint(args[4], 0, 15)
-            if special == -1:
+            special = toint(args[4], 0, 15, super)
+            if special <= -1:
                 return
         else:
             special = 0
         mcdraw.drawSphere(vec[0], vec[1], vec[2], radius, block, special)
-        mc.postToChat("Drew sphere successfully.")
+        chatWithSuper("Drew sphere successfully.", super)
     elif args[0] == "vertices":
         blocklist = []
         if len(args) >= 6 and not ((len(args) - 3) % 3):
-            block = getblock(args[-2])
-            if block == -1:
+            block = getblock(args[-2], super)
+            if block <= -1:
                 return
-            special = toint(args[-1], 0, 15)
-            if special == -1:
+            special = toint(args[-1], 0, 15, super)
+            if special <= -1:
                 return
             times = (len(args) - 3) / 3
         elif len(args) >= 5 and not ((len(args) - 2) % 3):
-            block = getblock(args[-1])
-            if block == -1:
+            block = getblock(args[-1], super)
+            if block <= -1:
                 return
             special = 0
             times = (len(args) - 2) / 3
         else:
-            invalid()
+            invalid(super)
             return
         time = 1
         while time <= times:
-            veclist = getvec(args[time * 3 - 2], args[time * 3 - 1], args[time * 3], False)
+            veclist = getvec(args[time * 3 - 2], args[time * 3 - 1], args[time * 3], False, super)
             if not veclist:
                 return
             blocklist.append(vec3.Vec3(veclist[0], veclist[1], veclist[2]))
             time += 1
         mcdraw.drawVertices(blocklist, block, special)
-        mc.postToChat("Drew vertices successfully.")
+        chatWithSuper("Drew vertices successfully.", super)
     else:
-        invalid()
+        invalid(super)
 
 
-def setting(args):
+def setting(args, super):
     if not (len(args) == 0 or len(args) == 2):
-        invalid()
+        invalid(super)
     else:
         if len(args) == 0:
-            print "autojump, nametags_visible, world_immutable"
+            if super is None:
+                print "autojump, nametags_visible, world_immutable"
+            else:
+                trystop(super)
+                chatWithSuper("Cannot use /setting in a function or a thread.", super)
+                return
         else:
-            setting = tobool(args[1])
-            if setting == -1:
+            setting = tobool(args[1], super)
+            if setting <= -1:
                 return
             if args[0] == "autojump":
                 mc.player.setting("autojump", setting)
@@ -402,21 +580,29 @@ def setting(args):
             elif args[0] == "world_immutable":
                 mc.setting("world_immutable", setting)
             else:
-                invalid()
+                invalid(super)
                 return
-            mc.postToChat("Changed the " + args[0] + " setting to " + args[1])
+            chatWithSuper("Changed the " + args[0] + " setting to " + args[1], super)
 
 
-def clear(args):
+def clear(args, super):
+    if not (super is None):
+        trystop(super)
+        chatWithSuper("Cannot use /clear in a function or a thread.", super)
+        return
     if not (len(args) == 0):
-        invalid()
+        invalid(None)
     else:
         os.system("clear")
 
 
-def help(args):
+def help(args, super):
+    if not (super is None):
+        trystop(super)
+        chatWithSuper("Cannot use /help in a function or a thread.", super)
+        return
     if not (len(args) == 1 or len(args) == 0):
-        invalid()
+        invalid(None)
     else:
         list = True
         try:
@@ -513,6 +699,19 @@ def help(args):
                 print " - /draw point <position: x y z> <tileName: string | tileId: int> [tileData: int]"
                 print " - /draw sphere <position: x y z> <radius: int> <tileName: string | tileId: int> [tileData: int]"
                 print " - /draw vertices <<position1: x1 y1 z1> [position2: x2 y2 z2] [position3: x3 y3 z3] ...> <tileName: string | tileId: int> [tileData: int]"
+            elif args[0] == "thread":
+                print '\033[0;33;40m',
+                print "thread:"
+                print " Manages threads to do something looped in cycles."
+                print '\033[0m',
+                print "Usage:"
+                print " - /thread add <threadName: string> <sleepTime: int> <command: stirng>"
+                print " - /thread clear"
+                print " - /thread list"
+                print " - /thread remove <threadName: string>"
+                print " - /thread setsleep <threadName: string> <sleepTime: int>"
+                print " - /thread start <threadName: string>"
+                print " - /thread stop <threadName: string>"
             else:
                 print '\033[0;31;40m',
                 print "The command is defined.",
@@ -530,188 +729,226 @@ def help(args):
                 print " /setplayername [newPlayerName: string]"
             elif page == 2:
                 print '\033[0m', "/setting [<setting: string> <status: boolean>]"
+                print " /thread add <threadName: string> <sleepTime: int> <command: stirng>"
+                print " /thread clear"
+                print " /thread list"
+                print " /thread remove <threadName: string>"
+                print " /thread setsleep <threadName: string> <sleepTime: int>"
+                print " /thread start <threadName: string>"
+            elif page == 3:
+                print " /thread stop <threadName: string>"
                 print " /tp <destination: x y z>"
                 print '\033[0;33;40m', "/draw circle <position: x0 y0 z> <radius: int> <tileName: string | tileId: int> [tileData: int]", '\033[0m'
                 print '\033[0;33;40m', "/draw face <<position1: x1 y1 z1> [position2: x2 y2 z2] [position3: x3 y3 z3] ...> <filled: boolean> <tileName: string | tileId: int> [tileData: int]", '\033[0m'
                 print '\033[0;33;40m', "/draw hollowSphere <position: x y z> <radius: int> <tileName: string | tileId: int> [tileData: int]", '\033[0m'
                 print '\033[0;33;40m', "/draw horizontalCircle <position: x0 y z0> <radius: int> <tileName: string | tileId: int> [tileData: int]", '\033[0m'
                 print '\033[0;33;40m', "/draw line <position1: x1 y1 z1> <position2: x2 y2 z2> <tileName: string | tileId: int> [tileData: int]", '\033[0m'
-            elif page == 3:
+            elif page == 4:
                 print '\033[0;33;40m', "/draw point <position: x y z> <tileName: string | tileId: int> [tileData: int]", '\033[0m'
                 print '\033[0;33;40m', "/draw sphere <position: x y z> <radius: int> <tileName: string | tileId: int> [tileData: int]", '\033[0m'
                 print '\033[0;33;40m', "/draw vertices <<position1: x1 y1 z1> [position2: x2 y2 z2] [position3: x3 y3 z3] ...> <tileName: string | tileId: int> [tileData: int]", '\033[0m'
             print '\033[0;32;40m', "Tip:", '\033[0;33;40m', "yellow", '\033[0;32;40m', "commands are add-ons' commands.", '\033[0m'
 
 
-def setplayername(args):
+def setplayername(args, super):
     if not (len(args) == 1 or len(args) == 0):
-        invalid()
+        invalid(super)
     else:
         global playerName
         if len(args) == 1:
             playerName = args[0]
+            if len(playerName) == 0:
+                invalid(super)
+                return
         else:
             playerName = "Player"
-        mc.postToChat("Player's name changed to \"" + playerName + "\" successfully")
+        chatWithSuper("Player's name changed to \"" + playerName + "\" successfully", super)
 
 
-def say(args):
+def merge(args):
+    output = ""
+    for argv in args:
+        output += " " + argv
+    return output
+
+
+def say(args, super):
     if not (len(args) > 0):
-        invalid()
+        invalid(super)
     else:
-        output = ""
-        for argv in args:
-            output += " " + argv
-        mc.postToChat("[" + playerName + "]" + output)
+        output = merge(args)
+        if super is None:
+            mc.postToChat("[" + playerName + "]" + output)
+        else:
+            chatWithSuper(output, super)
 
 
-def me(args):
+def me(args, super):
     if not (len(args) > 0):
-        invalid()
+        invalid(super)
     else:
-        output = ""
-        for argv in args:
-            output += " " + argv
-        mc.postToChat("* " + playerName + output)
+        output = merge(args)
+        if super is None:
+            mc.postToChat("* " + playerName + output)
+        else:
+            mc.postToChat("* " + superoutput(super) + output)
 
 
-def teleport(args):
+def teleport(args, super):
     if not (len(args) == 3):
-        invalid()
+        invalid(super)
     else:
-        vec = getvec(args[0], args[1], args[2], True)
+        vec = getvec(args[0], args[1], args[2], True, super)
         if not vec:
             return
         else:
             mc.player.setTilePos(vec[0], vec[1], vec[2])
-            mc.postToChat("Teleport Player to " + str(vec[0]) + ", " + str(vec[1]) + ", " + str(vec[2]))
+            chatWithSuper("Teleport Player to " + str(vec[0]) + ", " + str(vec[1]) + ", " + str(vec[2]), super)
 
 
-def setblock(args):
+def setblock(args, super):
     if not (len(args) == 4 or len(args) == 5):
-        invalid()
+        invalid(super)
     else:
-        vec = getvec(args[0], args[1], args[2], False)
+        vec = getvec(args[0], args[1], args[2], False, super)
         if not vec:
             return
         else:
             if len(args) == 5:
-                special = toint(args[4], 0, 15)
-                if special == -1:
+                special = toint(args[4], 0, 15, super)
+                if special <= -1:
                     return
             else:
                 special = 0
-            block = getblock(args[3])
-            if block == -1:
+            block = getblock(args[3], super)
+            if block <= -1:
                 return
             mc.setBlock(vec[0], vec[1], vec[2], block, special)
-            mc.postToChat("Block placed")
+            chatWithSuper("Block placed", super)
 
 
-def fill(args):
+def fill(args, super):
     if not (len(args) == 7 or len(args) == 8):
-        invalid()
+        invalid(super)
     else:
-        vecB = getvec(args[0], args[1], args[2], False)
+        vecB = getvec(args[0], args[1], args[2], False, super)
         if not vecB:
             return
-        vecE = getvec(args[3], args[4], args[5], False)
+        vecE = getvec(args[3], args[4], args[5], False, super)
         if not vecE:
             return
         blockCount = (abs(vecB[0] - vecE[0]) + 1) * (abs(vecB[1] - vecE[1]) + 1) * (abs(vecB[2] - vecE[2]) + 1)
         if len(args) == 8:
-            special = toint(args[7], 0, 15)
-            if special == -1:
+            special = toint(args[7], 0, 15, super)
+            if special <= -1:
                 return
         else:
             special = 0
-        block = getblock(args[6])
-        if block == -1:
+        block = getblock(args[6], super)
+        if block <= -1:
             return
         mc.setBlocks(vecB[0], vecB[1], vecB[2], vecE[0], vecE[1], vecE[2], block, special)
-        mc.postToChat(str(blockCount) + " blocks filled")
+        chatWithSuper(str(blockCount) + " blocks filled", super)
 
 
-def switchcommand(args):
+def switchcommand(args, super):
     if args[0] == "say":
-        say(args[1:])
+        say(args[1:], super)
     elif args[0] == "tp":
-        teleport(args[1:])
+        teleport(args[1:], super)
     elif args[0] == "me":
-        me(args[1:])
+        me(args[1:], super)
     elif args[0] == "setblock":
-        setblock(args[1:])
+        setblock(args[1:], super)
     elif args[0] == "fill" or args[0] == "setblocks":
-        fill(args[1:])
+        fill(args[1:], super)
     elif args[0] == "help":
-        help(args[1:])
+        help(args[1:], super)
     elif args[0] == "setplayername":
-        setplayername(args[1:])
+        setplayername(args[1:], super)
     elif args[0] == "clear":
-        clear(args[1:])
+        clear(args[1:], super)
     elif args[0] == "setting":
-        setting(args[1:])
+        setting(args[1:], super)
     elif args[0] == "draw":
-        draw(args[1:])
+        draw(args[1:], super)
+    elif args[0] == "thread":
+        thread(args[1:], super)
     else:
+        if super is None:
+            print '\033[0;31;40m',
+            print "Unknown command. Try /help for a list of commands",
+            print '\033[0m'
+        else:
+            trystop(super)
+            chatWithSuper("Unknown command.", super)
+
+
+def invalid(super):
+    if super is None:
         print '\033[0;31;40m',
-        print "Unknown command. Try /help for a list of commands",
+        print "Invalid command syntax",
         print '\033[0m'
+    else:
+        trystop(super)
+        chatWithSuper("Invalid command syntax",super)
 
 
-def invalid():
-    print '\033[0;31;40m',
-    print "Invalid command syntax",
-    print '\033[0m'
+def toomin(num, min, super):
+    if super is None:
+        print '\033[0;31;40m',
+        print "The number you have entered (" + str(num) + ") is too small, it must be at least " + str(min),
+        print '\033[0m'
+    else:
+        trystop(super)
+        chatWithSuper("The number you have entered (" + str(num) + ") is too small, it must be at least " + str(min), super)
 
 
-def toomin(num, min):
-    print '\033[0;31;40m',
-    print "The number you have entered (" + str(num) + ") is too big, it must be at most " + str(max),
-    print '\033[0m'
+def toomax(num, max, super):
+    if super is None:
+        print '\033[0;31;40m',
+        print "The number you have entered (" + str(num) + ") is too big, it must be at most " + str(max),
+        print '\033[0m'
+    else:
+        trystop(super)
+        chatWithSuper("The number you have entered (" + str(num) + ") is too big, it must be at most " + str(max), super)
 
 
-def toomax(num, max):
-    print '\033[0;31;40m',
-    print "The number you have entered (" + str(num) + ") is too small, it must be at least " + str(max),
-    print '\033[0m'
-
-
-def getblock(argv):
-    if (argv in blockDictionary.keys()):
+def getblock(argv, super):
+    if argv in blockDictionary.keys():
         return blockDictionary[argv]
     else:
-        blockId = toint(argv, 0, 256)
-        if (blockId == -1):
+        blockId = toint(argv, 0, 256, super)
+        if blockId <= -1:
             return -1
 
 
-def toint(intStr, min, max):
+def toint(intStr, min, max, super):
     try:
         res = int(intStr)
         if res < min:
-            toomin(res, min)
+            toomin(res, min, super)
             return -1
         if res > max:
-            toomax(res, max)
+            toomax(res, max, super)
             return -1
     except ValueError:
-        invalid()
+        invalid(super)
         return -1
     return res
 
 
-def tobool(argv):
+def tobool(argv, super):
     if argv == "true":
         return True
     elif argv == "false":
         return False
     else:
-        invalid()
+        invalid(super)
         return -1
 
 
-def getvec(x, y, z, isFloat):
+def getvec(x, y, z, isFloat, super):
     if isFloat:
         vec = [0, 0, 0]
         if x[0] == "~":
@@ -721,14 +958,14 @@ def getvec(x, y, z, isFloat):
                 else:
                     add = float(x[1:])
             except ValueError:
-                invalid()
+                invalid(super)
                 return False
             vec[0] = mc.player.getTilePos().x + add
         else:
             try:
                 vec[0] = float(x)
             except ValueError:
-                invalid()
+                invalid(super)
                 return False
         if y[0] == "~":
             try:
@@ -737,14 +974,14 @@ def getvec(x, y, z, isFloat):
                 else:
                     add = float(y[1:])
             except ValueError:
-                invalid()
+                invalid(super)
                 return False
             vec[1] = mc.player.getTilePos().y + add
         else:
             try:
                 vec[1] = float(y)
             except ValueError:
-                invalid()
+                invalid(super)
                 return False
         if z[0] == "~":
             try:
@@ -753,14 +990,14 @@ def getvec(x, y, z, isFloat):
                 else:
                     add = float(z[1:])
             except ValueError:
-                invalid()
+                invalid(super)
                 return False
             vec[2] = mc.player.getTilePos().z + add
         else:
             try:
                 vec[2] = float(z)
             except ValueError:
-                invalid()
+                invalid(super)
                 return False
     else:
         vec = [0, 0, 0]
@@ -771,14 +1008,14 @@ def getvec(x, y, z, isFloat):
                 else:
                     add = int(x[1:])
             except ValueError:
-                invalid()
+                invalid(super)
                 return False
             vec[0] = int(mc.player.getTilePos().x) + add
         else:
             try:
                 vec[0] = int(x)
             except ValueError:
-                invalid()
+                invalid(super)
                 return False
         if y[0] == "~":
             try:
@@ -787,14 +1024,14 @@ def getvec(x, y, z, isFloat):
                 else:
                     add = int(y[1:])
             except ValueError:
-                invalid()
+                invalid(super)
                 return False
             vec[1] = int(mc.player.getTilePos().y) + add
         else:
             try:
                 vec[1] = int(y)
             except ValueError:
-                invalid()
+                invalid(super)
                 return False
         if z[0] == "~":
             try:
@@ -803,47 +1040,53 @@ def getvec(x, y, z, isFloat):
                 else:
                     add = int(z[1:])
             except ValueError:
-                invalid()
+                invalid(super)
                 return False
             vec[2] = int(mc.player.getTilePos().z) + add
         else:
             try:
                 vec[2] = int(z)
             except ValueError:
-                invalid()
+                invalid(super)
                 return False
     if vec[0] > 128:
-        toomax(vec[0], 128)
+        toomax(vec[0], 128, super)
     elif vec[0] < -128:
-        toomin(vec[0], -128)
+        toomin(vec[0], -128, super)
     elif vec[1] > 64:
-        toomax(vec[1], 64)
+        toomax(vec[1], 64, super)
     elif vec[1] < -64:
-        toomin(vec[1], -64)
+        toomin(vec[1], -64, super)
     elif vec[2] > 128:
-        toomax(vec[2], 128)
+        toomax(vec[2], 128, super)
     elif vec[2] < -128:
-        toomin(vec[2], -128)
+        toomin(vec[2], -128, super)
     else:
         return vec
     return False
 
 
-while True:
-    input = raw_input("> ")
-    if input == '\x1b':
-        break
-    if len(input) == 0:
-        continue
-    if not (input.find("/") == 0):
-        mc.postToChat("<" + playerName + "> " + input)
-        continue
+def readCommand(command, super=None):
     commandArgs = []
     addingArgv = ""
-    for word in input[1:] + " ":
+    for word in command + " ":
         if not (word == " "):
             addingArgv += word
         else:
             commandArgs.append(addingArgv)
             addingArgv = ""
-    switchcommand(commandArgs)
+    switchcommand(commandArgs, super)
+
+
+while True:
+    input = raw_input("> ")
+    if input == '\x1b':
+        for name in threads:
+            threads[name].stop()
+        break
+    if len(input) == 0:
+        continue
+    if not (input.find("/") == 0):
+        mc.postToChat("<" + playerName + "> " + input)
+    else:
+        readCommand(input[1:])
