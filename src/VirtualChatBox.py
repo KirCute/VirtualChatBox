@@ -206,6 +206,54 @@ def tocommand(args):
     return command
 
 
+def camera(args, super):
+    if len(args) == 0:
+        invalid(super)
+        return
+    if args[0] == "normal":
+        if len(args) == 1:
+            mc.camera.setNormal()
+            chatWithSuper("Sat camera mode to normal Minecraft view successfully.", super)
+        elif len(args) == 2:
+            entityId = toint(args[1], 0, 2147483647, super)
+            if entityId == -1:
+                return
+            mc.camera.setNormal(entityId)
+            chatWithSuper("Sat camera mode to normal Minecraft view (" + args[1] +") successfully.", super)
+        else:
+            invalid(super)
+            return
+    elif args[0] == "fixed":
+        if not (len(args) == 1):
+            invalid(super)
+            return
+        mc.camera.setFixed()
+        chatWithSuper("Sat camera mode to fixed view successfully.", super)
+    elif args[0] == "follow":
+        if len(args) == 1:
+            mc.camera.setFollow()
+            chatWithSuper("Sat camera to follow view successfully.", super)
+        elif len(args) == 2:
+            entityId = toint(args[1], 0, 2147483647, super)
+            if entityId == -1:
+                return
+            mc.camera.setFollow(entityId)
+            chatWithSuper("Sat camera mode to follow Entity " + args[1] + " successfully.", super)
+        else:
+            invalid(super)
+            return
+    elif args[0] == "pos":
+        if not (len(args) == 4):
+            invalid(super)
+            return
+        vec = getvec(args[1], args[2], args[3], True, super)
+        mc.camera.setPos(vec[0], vec[1], vec[2])
+        chatWithSuper("Set camera entity position (" + args[1] + "," + args[2] + ", " + args[3] + ") successfully.", super)
+    else:
+        invalid(super)
+        return
+
+
 def thread(args, super):
     if len(args) == 0:
         invalid(super)
@@ -712,6 +760,16 @@ def help(args, super):
                 print " - /thread setsleep <threadName: string> <sleepTime: int>"
                 print " - /thread start <threadName: string>"
                 print " - /thread stop <threadName: string>"
+            elif args[0] == "camera":
+                print '\033[0;33;40m',
+                print "camera:"
+                print " Changes camera mode."
+                print '\033[0m',
+                print "Usage:"
+                print " - /camera fixed"
+                print " - /camera follow [entityId: int]"
+                print " - /camera normal [entityId: int]"
+                print " - /camera pos <position: x y z>"
             else:
                 print '\033[0;31;40m',
                 print "The command is defined.",
@@ -720,34 +778,38 @@ def help(args, super):
             print '\033[0;32;40m',
             print "--- Showing help page " + str(page) + " of " + str(helpPageCount) + " (/help <page>) ---"
             if page == 1:
-                print '\033[0m', "/clear"
+                print '\033[0m', "/camera fixed"
+                print " /camera follow [entityId: int]"
+                print " /camera normal [entityId: int]"
+                print " /camera pos <position: x y z>"
+                print " /clear"
                 print " /fill <from: x y z> <to: x y z> <tileName: string | tileId: int> [tileData: int]"
                 print " /help [command: string | page: int]"
-                print " /me <action: string>"
+            elif page == 2:
+                print '\033[0m', "/me <action: string>"
                 print " /say <message: string>"
                 print " /setblock <position: x y z> <tileName: string | tileId: int> [tileData: int]"
                 print " /setplayername [newPlayerName: string]"
-            elif page == 2:
-                print '\033[0m', "/setting [<setting: string> <status: boolean>]"
+                print " /setting [<setting: string> <status: boolean>]"
                 print " /thread add <threadName: string> <sleepTime: int> <command: stirng>"
                 print " /thread clear"
-                print " /thread list"
+            elif page == 3:
+                print '\033[0m', "/thread list"
                 print " /thread remove <threadName: string>"
                 print " /thread setsleep <threadName: string> <sleepTime: int>"
                 print " /thread start <threadName: string>"
-            elif page == 3:
                 print " /thread stop <threadName: string>"
                 print " /tp <destination: x y z>"
                 print '\033[0;33;40m', "/draw circle <position: x0 y0 z> <radius: int> <tileName: string | tileId: int> [tileData: int]", '\033[0m'
+            elif page == 4:
                 print '\033[0;33;40m', "/draw face <<position1: x1 y1 z1> [position2: x2 y2 z2] [position3: x3 y3 z3] ...> <filled: boolean> <tileName: string | tileId: int> [tileData: int]", '\033[0m'
                 print '\033[0;33;40m', "/draw hollowSphere <position: x y z> <radius: int> <tileName: string | tileId: int> [tileData: int]", '\033[0m'
                 print '\033[0;33;40m', "/draw horizontalCircle <position: x0 y z0> <radius: int> <tileName: string | tileId: int> [tileData: int]", '\033[0m'
                 print '\033[0;33;40m', "/draw line <position1: x1 y1 z1> <position2: x2 y2 z2> <tileName: string | tileId: int> [tileData: int]", '\033[0m'
-            elif page == 4:
                 print '\033[0;33;40m', "/draw point <position: x y z> <tileName: string | tileId: int> [tileData: int]", '\033[0m'
                 print '\033[0;33;40m', "/draw sphere <position: x y z> <radius: int> <tileName: string | tileId: int> [tileData: int]", '\033[0m'
                 print '\033[0;33;40m', "/draw vertices <<position1: x1 y1 z1> [position2: x2 y2 z2] [position3: x3 y3 z3] ...> <tileName: string | tileId: int> [tileData: int]", '\033[0m'
-            print '\033[0;32;40m', "Tip:", '\033[0;33;40m', "yellow", '\033[0;32;40m', "commands are add-ons' commands.", '\033[0m'
+            print '\033[0;32;40m', "Tip: " + '\033[0;33;40m' + "yellow" + '\033[0;32;40m' + " commands are add-ons' commands.", '\033[0m'
 
 
 def setplayername(args, super):
@@ -874,6 +936,8 @@ def switchcommand(args, super):
         draw(args[1:], super)
     elif args[0] == "thread":
         thread(args[1:], super)
+    elif args[0] == "camera":
+        camera(args[1:], super)
     else:
         if super is None:
             print '\033[0;31;40m',
