@@ -5,19 +5,28 @@ import time
 import threading
 from mcpi import minecraft, block, vec3
 
-disablems = False
+disablems = True
 try:
     import minecraftstuff
+    disablems = False
 except ImportError:
     print '\033[0;33;40m',
     print "Warning: Package \"minecraftstuff\" is defined."
     print " It means some commands will not be available."
     print " Try \"sudo pip install minecraftstuff\" to get it.",
     print '\033[0m'
-    disablems = True
+
+gpiomode = 0
+try:
+    import RPi.GPIO
+    gpiomode = RPi.GPIO.BOARD
+except ImportError:
+    print '\033[0;33;40m',
+    print "Warning: Package \"RPi.GPIO\" is defined."
+    print " It means some commands will not be available.",
+    print '\033[0m'
 
 try:
-    global mc
     if len(sys.argv) == 3:
         mc = minecraft.Minecraft.create(sys.argv[1], int(sys.argv[2]))
     elif len(sys.argv) == 2:
@@ -46,8 +55,10 @@ if not disablems:
     mcdraw = minecraftstuff.MinecraftDrawing(mc)
     mcshapes = {}
     mcturtles = {}
+if not os.path.exists("functions"):
+    os.mkdir("functions")
 threads = {}
-helpPageCount = 4
+helpPageCount = 10
 playerName = "Player"
 blockDictionary = {
     "air": block.AIR,
@@ -197,6 +208,74 @@ blockDictionary = {
 }
 
 
+def gpio(args, super):
+    pass
+
+
+def function(args, super):
+    global commandLines
+    if not (len(args) == 1):
+        invalid(super)
+        return
+    if ":" in args[0]:
+        namespace = args[0][0:args[0].find(":")] + "/"
+    else:
+        namespace = ""
+    functionName = args[0][args[0].find(":") + 1:]
+    if namespace == "" or os.path.isdir("functions/" + namespace):
+        if os.path.isfile("functions/" + namespace + functionName + ".mcpifunction"):
+            try:
+                functionfile = open("functions/" + namespace + functionName + ".mcpifunction", 'r')
+                commandLines = functionfile.readlines()
+                functionfile.close()
+            except EOFError, arg:
+                (errno, err_msg) = arg
+                if super is None:
+                    print '\033[0;31;40m',
+                    print "Cannot open file: %s, errno=%d" % (err_msg, errno),
+                    print '\033[0m'
+                    return
+                trystop(super)
+                chatWithSuper("Cannot open file: " + err_msg + ", errno=" + errno, super)
+            except IOError, arg:
+                (errno, err_msg) = arg
+                if super is None:
+                    print '\033[0;31;40m',
+                    print "Cannot open file: %s, errno=%d" % (err_msg, errno),
+                    print '\033[0m'
+                    return
+                trystop(super)
+                chatWithSuper("Cannot open file: " + err_msg + ", errno=" + errno, super)
+            if super is None:
+                funSuper = "f_" + functionName
+            else:
+                funSuper = super + ".f_" + functionName
+            chatWithSuper("Function " + functionName + " started to run.", super)
+            for command in commandLines:
+                if len(command) == 0 or command[0] == "#":
+                    continue
+                if command == "exit":
+                    break
+                readCommand(command, funSuper)
+            chatWithSuper("Function " + functionName + " finished.", super)
+        else:
+            if super is None:
+                print '\033[0;31;40m',
+                print "Cannot open file: function doesn't exists.",
+                print '\033[0m'
+                return
+            trystop(super)
+            chatWithSuper("Cannot open file: function doesn't exists.", super)
+    else:
+        if super is None:
+            print '\033[0;31;40m',
+            print "Cannot open file: namespace doesn't exists.",
+            print '\033[0m'
+            return
+        trystop(super)
+        chatWithSuper("Cannot open file: namespace doesn't exists.", super)
+
+
 def tocommand(args):
     command = merge(args)
     if command[1] == "/":
@@ -258,7 +337,7 @@ def thread(args, super):
     if len(args) == 0:
         invalid(super)
     elif args[0] == "add":
-        if len(args) < 4:
+        if len(args) < 5:
             invalid(super)
             return
         name = args[1]
@@ -283,14 +362,17 @@ def thread(args, super):
             trystop(super)
             chatWithSuper("Thread " + name + " already exists.", super)
             return
-        sleep = toint(args[2], 0, 2147483647, super)
+        cycle = tobool(args[2], super)
+        if cycle <= -1:
+            return
+        sleep = toint(args[3], 0, 2147483647, super)
         if sleep <= -1:
             return
-        command = tocommand(args[3:])
+        command = tocommand(args[4:])
         if super is None:
-            threads[name] = CommandThread("t_" + name, command, float(sleep / 20))
+            threads[name] = CommandThread("t_" + name, cycle, command, float(sleep / 20))
         else:
-            threads[name] = CommandThread(super + ".t_" + name, command, float(sleep / 20))
+            threads[name] = CommandThread(super + ".t_" + name, cycle, command, float(sleep / 20))
         threads[name].start()
         chatWithSuper("Created Thread " + name + " successfully.", super)
     elif args[0] == "start":
@@ -325,6 +407,9 @@ def thread(args, super):
         del threads[name]
         chatWithSuper("Removed Thread " + name + ".", super)
     elif args[0] == "list":
+        if not (len(args) == 1):
+            invalid(super)
+            return
         if not (super is None):
             trystop(super)
             chatWithSuper("Cannot use /thread list in a function or a thread.", super)
@@ -337,7 +422,7 @@ def thread(args, super):
                 print "Stoped"
             else:
                 print "Running"
-    elif args[0] == "clear":
+    elif args[0] == "removeAll":
         for name in threads.keys():
             threads[name].stop()
             del threads[name]
@@ -354,6 +439,20 @@ def thread(args, super):
         if sleep <= -1:
             return
         threads[name].setsleep(float(sleep / 20))
+        chatWithSuper("Sat Thread " + name + "\'s sleep to " + args[2] + ".", super)
+    elif args[0] == "setcycle":
+        if not (len(args) == 3):
+            invalid(super)
+            return
+        name = args[1]
+        if not (name in threads.keys()):
+            chatWithSuper("Thread " + name + " doesn't exists.", super)
+            return
+        cycle = tobool(args[2], super)
+        if cycle <= -1:
+            return
+        threads[name].setcycle(cycle)
+        chatWithSuper("Sat Thread " + name + "\'s cycle to " + args[2] + ".", super)
     else:
         invalid(super)
 
@@ -361,8 +460,8 @@ def thread(args, super):
 def superoutput(super):
     if "." in super:
         threadname = super[2:super.find(".") + 1]
-        fun = superoutput(super[find(".") + 1:])
-        return threadname + "." + fun
+        fun = superoutput(super[super.find(".") + 1:])
+        return threadname + fun
     else:
         return super[2:]
 
@@ -381,9 +480,10 @@ def chatWithSuper(msg, super):
 
 
 class CommandThread(threading.Thread):
-    def __init__(self, name, command, sleep):
+    def __init__(self, name, cycle, command, sleep):
         threading.Thread.__init__(self)
         self.name = name
+        self.cycle = cycle
         self.command = command
         self.sleep = sleep
         self.pause = True
@@ -394,6 +494,8 @@ class CommandThread(threading.Thread):
             if not self.pause:
                 readCommand(self.command, self.name)
                 time.sleep(self.sleep)
+                if not self.cycle:
+                    self.setpause()
 
     def continuethread(self):
         self.pause = False
@@ -409,6 +511,788 @@ class CommandThread(threading.Thread):
 
     def stop(self):
         self.delete = True
+
+    def setcycle(self, cycle):
+        self.cycle = cycle
+
+
+def getrotate(yaw, pitch, roll, super):
+    rotate = [0, 0, 0]
+    try:
+        rotate[0] = float(yaw)
+        rotate[1] = float(pitch)
+        rotate[2] = float(roll)
+        return rotate
+    except ValueError:
+        invalid(super)
+        return False
+
+
+def shape(args, super):
+    global shapeblocks
+    if disablems:
+        if not (super is None):
+            trystop(super)
+            chatWithSuper("Package \"minecraftstuff\" is defined, \"/shape\" is not available.", super)
+            return
+        print '\033[0;33;40m',
+        print "Package \"minecraftstuff\" is defined, \"/shape\" is not available.",
+        print '\033[0m'
+        return
+    if len(args) == 0:
+        invalid(super)
+        return
+    if args[0] == "add":
+        if not (len(args) == 5 or len(args) == 6 or len(args) == 12):
+            invalid(super)
+            return
+        name = args[1]
+        if len(name) == 0:
+            invalid(super)
+            return
+        if len(name) > 15:
+            if super is None:
+                print '\033[0;31;40m',
+                print "The name you have entered (" + name + ") is too long, it must be at longest 15",
+                print '\033[0m'
+                return
+            trystop(super)
+            chatWithSuper("The name you have entered (" + name + ") is too long, it must be at longest 15", super)
+            return
+        if name in mcshapes.keys():
+            if super is None:
+                print '\033[0;31;40m',
+                print "Shape " + name + " already exists.",
+                print '\033[0m'
+                return
+            trystop(super)
+            chatWithSuper("Shape " + name + " already exists.", super)
+            return
+        vec = getvec(args[2], args[3], args[4], False, super)
+        if not vec:
+            return
+        if len(args) > 5:
+            visible = tobool(args[5], super)
+            if visible <= -1:
+                return
+            if len(args) == 11:
+                vecB = getvec(args[6], args[7], args[8], False, super)
+                if not vecB:
+                    return
+                vecE = getvec(args[9], args[10], args[11], False, super)
+                if not vecE:
+                    return
+                shapeblocks = mc.getBlocks(vecB[0], vecB[1], vecB[2], vecE[0], vecE[1], vecE[2])
+            else:
+                shapeblocks = None
+        else:
+            visible = True
+        mcshapes[name] = minecraftstuff.MinecraftShape(mc, minecraft.Vec3(vec[0], vec[1], vec[2]), shapeblocks, visible)
+        chatWithSuper("Created Shape " + name +" successfully.", super)
+    elif args[0] == "clearAll":
+        if not (len(args) == 1):
+            invalid(super)
+            return
+        for shape in mcshapes:
+            shape.clear()
+        chatWithSuper("Cleared all shapes successfully.", super)
+    elif args[0] == "clear":
+        if not (len(args) == 2):
+            invalid(super)
+            return
+        if args[1] in mcshapes:
+            mcshapes[args[1]].clear()
+            chatWithSuper("Cleared Shape " + args[1] + " successfully.", super)
+        else:
+            if super is None:
+                print '\033[0;31;40m',
+                print "Shape " + args[1] + " doesn't exists.",
+                print '\033[0m'
+                return
+            trystop(super)
+            chatWithSuper("Shape " + args[1] + " doesn't exists.", super)
+            return
+    elif args[0] == "draw":
+        if not (len(args) == 2):
+            invalid(super)
+            return
+        if args[1] in mcshapes:
+            mcshapes[args[1]].draw()
+            chatWithSuper("Drew Shape " + args[1] + " successfully.", super)
+        else:
+            if super is None:
+                print '\033[0;31;40m',
+                print "Shape " + args[1] + " doesn't exists.",
+                print '\033[0m'
+                return
+            trystop(super)
+            chatWithSuper("Shape " + args[1] + " doesn't exists.", super)
+            return
+    elif args[0] == "move":
+        if not (len(args) == 5):
+            invalid(super)
+            return
+        if args[1] in mcshapes:
+            vec = getvec(args[2], args[3], args[4], False, super)
+            if not vec:
+                return
+            mcshapes[args[1]].move(vec[0], vec[1], vec[2])
+            chatWithSuper("Moved Shape " + args[1] + " to (" + args[2] + ", " + args[3] + ", " + args[4] + ") successfully.", super)
+        else:
+            if super is None:
+                print '\033[0;31;40m',
+                print "Shape " + args[1] + " doesn't exists.",
+                print '\033[0m'
+                return
+            trystop(super)
+            chatWithSuper("Shape " + args[1] + " doesn't exists.", super)
+            return
+    elif args[0] == "moveBy":
+        if not (len(args) == 5):
+            invalid(super)
+            return
+        if args[1] in mcshapes:
+            vec = getvec(args[2], args[3], args[4], False, super)
+            if not vec:
+                return
+            mcshapes[args[1]].moveBy(vec[0], vec[1], vec[2])
+            chatWithSuper("Moved Shape " + args[1] + " by (" + args[2] + ", " + args[3] + ", " + args[4] + ") successfully.", super)
+        else:
+            if super is None:
+                print '\033[0;31;40m',
+                print "Shape " + args[1] + " doesn't exists.",
+                print '\033[0m'
+                return
+            trystop(super)
+            chatWithSuper("Shape " + args[1] + " doesn't exists.", super)
+            return
+    elif args[0] == "redraw":
+        if not (len(args) == 2):
+            invalid(super)
+            return
+        if args[1] in mcshapes:
+            mcshapes[args[1]].redraw()
+            chatWithSuper("Redrew Shape " + args[1] + " successfully.", super)
+        else:
+            if super is None:
+                print '\033[0;31;40m',
+                print "Shape " + args[1] + " doesn't exists.",
+                print '\033[0m'
+                return
+            trystop(super)
+            chatWithSuper("Shape " + args[1] + " doesn't exists.", super)
+            return
+    elif args[0] == "reset":
+        if not (len(args) == 2):
+            invalid(super)
+            return
+        if args[1] in mcshapes:
+            mcshapes[args[1]].reset()
+            chatWithSuper("Resat Shape " + args[1] + " successfully.", super)
+        else:
+            if super is None:
+                print '\033[0;31;40m',
+                print "Shape " + args[1] + " doesn't exists.",
+                print '\033[0m'
+                return
+            trystop(super)
+            chatWithSuper("Shape " + args[1] + " doesn't exists.", super)
+            return
+    elif args[0] == "rotate":
+        if not (len(args) == 5):
+            invalid(super)
+            return
+        if args[1] in mcshapes:
+            vec = getrotate(args[2], args[3], args[4], super)
+            if not vec:
+                return
+            mcshapes[args[1]].rotate(vec[0], vec[1], vec[2])
+            chatWithSuper(
+                "Sat the rotate of Shape " + args[1] + " to (" + args[2] + ", " + args[3] + ", " + args[4] + ") successfully.",
+                super)
+        else:
+            if super is None:
+                print '\033[0;31;40m',
+                print "Shape " + args[1] + " doesn't exists.",
+                print '\033[0m'
+                return
+            trystop(super)
+            chatWithSuper("Shape " + args[1] + " doesn't exists.", super)
+            return
+    elif args[0] == "rotateBy":
+        if not (len(args) == 5):
+            invalid(super)
+            return
+        if args[1] in mcshapes:
+            vec = getrotate(args[2], args[3], args[4], super)
+            if not vec:
+                return
+            mcshapes[args[1]].rotateBy(vec[0], vec[1], vec[2])
+            chatWithSuper(
+                "Sat the rotate of Shape " + args[1] + " by (" + args[2] + ", " + args[3] + ", " + args[4] + ") successfully.",
+                super)
+        else:
+            if super is None:
+                print '\033[0;31;40m',
+                print "Shape " + args[1] + " doesn't exists.",
+                print '\033[0m'
+                return
+            trystop(super)
+            chatWithSuper("Shape " + args[1] + " doesn't exists.", super)
+            return
+    elif args[0] == "setblock":
+        if not (len(args) == 5 or len(args) == 6):
+            invalid(super)
+            return
+        if args[1] in mcshapes:
+            vec = getvec(args[2], args[3], args[4], False, super)
+            if not vec:
+                return
+            else:
+                if len(args) == 7:
+                    special = toint(args[6], 0, 15, super)
+                    if special <= -1:
+                        return
+                else:
+                    special = 0
+                block = getblock(args[5], super)
+                if block <= -1:
+                    return
+                mcshapes[args[1]].setBlock(vec[0], vec[1], vec[2], block, special)
+                chatWithSuper("Shape-block placed", super)
+        else:
+            if super is None:
+                print '\033[0;31;40m',
+                print "Shape " + args[1] + " doesn't exists.",
+                print '\033[0m'
+                return
+            trystop(super)
+            chatWithSuper("Shape " + args[1] + " doesn't exists.", super)
+            return
+    elif args[0] == "fill" or args[0] == "setblocks":
+        if not (len(args) == 9 or len(args) == 10):
+            invalid(super)
+            return
+        if args[1] in mcshapes:
+            vecB = getvec(args[2], args[3], args[4], False, super)
+            if not vecB:
+                return
+            vecE = getvec(args[5], args[6], args[7], False, super)
+            if not vecE:
+                return
+            blockCount = (abs(vecB[0] - vecE[0]) + 1) * (abs(vecB[1] - vecE[1]) + 1) * (abs(vecB[2] - vecE[2]) + 1)
+            if len(args) == 10:
+                special = toint(args[9], 0, 15, super)
+                if special <= -1:
+                    return
+            else:
+                special = 0
+            block = getblock(args[8], super)
+            if block <= -1:
+                return
+            mcshapes[args[1]].setBlocks(vecB[0], vecB[1], vecB[2], vecE[0], vecE[1], vecE[2], block, special)
+            chatWithSuper(str(blockCount) + " shape-blocks filled", super)
+        else:
+            if super is None:
+                print '\033[0;31;40m',
+                print "Shape " + args[1] + " doesn't exists.",
+                print '\033[0m'
+                return
+            trystop(super)
+            chatWithSuper("Shape " + args[1] + " doesn't exists.", super)
+            return
+    elif args[0] == "removeAll":
+        if not (len(args) == 1):
+            invalid(super)
+            return
+        mcshapes.clear()
+        chatWithSuper("Removed all shapes successfully.", super)
+    elif args[0] == "remove":
+        if not (len(args) == 2):
+            invalid(super)
+            return
+        if args[1] in mcshapes:
+            del mcshapes[args[1]]
+            chatWithSuper("Removed Shape " + args[1] + " successfully.", super)
+        else:
+            if super is None:
+                print '\033[0;31;40m',
+                print "Shape " + args[1] + " doesn't exists.",
+                print '\033[0m'
+                return
+            trystop(super)
+            chatWithSuper("Shape " + args[1] + " doesn't exists.", super)
+            return
+    elif args[0] == "list":
+        if not (len(args) == 1):
+            invalid(super)
+            return
+        if not (super is None):
+            trystop(super)
+            chatWithSuper("Cannot use /shape list in a function or a thread.", super)
+            return
+        print '\033[0;32;40m', "-------- Showing list of Shapes --------"
+        for shapename in mcshapes.keys():
+            print " " + shapename
+    else:
+        invalid(super)
+
+
+def tofloat(argv, super):
+    try:
+        return float(argv)
+    except ValueError:
+        invalid(super)
+        return -1
+
+
+def turtle(args, super):
+    if disablems:
+        if not (super is None):
+            trystop(super)
+            chatWithSuper("Package \"minecraftstuff\" is defined, \"/turtle\" is not available.", super)
+            return
+        print '\033[0;33;40m',
+        print "Package \"minecraftstuff\" is defined, \"/turtle\" is not available.",
+        print '\033[0m'
+        return
+    if len(args) == 0:
+        invalid(super)
+        return
+    if args[0] == "add":
+        if not (len(args) == 5 or len(args) == 2):
+            invalid(super)
+            return
+        name = args[1]
+        if len(name) == 0:
+            invalid(super)
+            return
+        if len(name) > 15:
+            if super is None:
+                print '\033[0;31;40m',
+                print "The name you have entered (" + name + ") is too long, it must be at longest 15",
+                print '\033[0m'
+                return
+            trystop(super)
+            chatWithSuper("The name you have entered (" + name + ") is too long, it must be at longest 15", super)
+            return
+        if name in mcturtles.keys():
+            if super is None:
+                print '\033[0;31;40m',
+                print "Turtle " + name + " already exists.",
+                print '\033[0m'
+                return
+            trystop(super)
+            chatWithSuper("Turtle " + name + " already exists.", super)
+            return
+        if len(args) == 5:
+            vec = getvec(args[2], args[3], args[4], False, super)
+            if not vec:
+                return
+        else:
+            vec = [0, 0, 0]
+        mcturtles[name] = minecraftstuff.MinecraftTurtle(mc, minecraft.Vec3(vec[0], vec[1], vec[2]))
+        chatWithSuper("Created Turtle " + name + " successfully.", super)
+    elif args[0] == "backward":
+        if not (len(args) == 3):
+            invalid(super)
+            return
+        if args[1] in mcturtles.keys():
+            disance = toint(args[2], 0, 256, super)
+            if disance <= -1:
+                return
+            mcturtles[args[1]].backward(disance)
+            chatWithSuper("Moved Turtle " + args[1] + " backward by " + args[2], super)
+        else:
+            if super is None:
+                print '\033[0;31;40m',
+                print "Turtle " + args[1] + " doesn't exists.",
+                print '\033[0m'
+                return
+            trystop(super)
+            chatWithSuper("Turtle " + args[1] + " doesn't exists.", super)
+            return
+    elif args[0] == "down":
+        if not (len(args) == 3):
+            invalid(super)
+            return
+        if args[1] in mcturtles.keys():
+            angle = tofloat(args[2], super)
+            if angle <= -1:
+                return
+            mcturtles[args[1]].down(angle)
+            chatWithSuper("Rotated Turtle " + args[1] + " down by " + args[2], super)
+        else:
+            if super is None:
+                print '\033[0;31;40m',
+                print "Turtle " + args[1] + " doesn't exists.",
+                print '\033[0m'
+                return
+            trystop(super)
+            chatWithSuper("Turtle " + args[1] + " doesn't exists.", super)
+            return
+    elif args[0] == "fly":
+        if not (len(args) == 2):
+            invalid(super)
+            return
+        if args[1] in mcturtles.keys():
+            mcturtles[args[1]].fly()
+            chatWithSuper("Sat Turtle " + args[1] + " fly.", super)
+        else:
+            if super is None:
+                print '\033[0;31;40m',
+                print "Turtle " + args[1] + " doesn't exists.",
+                print '\033[0m'
+                return
+            trystop(super)
+            chatWithSuper("Turtle " + args[1] + " doesn't exists.", super)
+            return
+    elif args[0] == "forward":
+        if not (len(args) == 3):
+            invalid(super)
+            return
+        if args[1] in mcturtles.keys():
+            disance = toint(args[2], 0, 256, super)
+            if disance <= -1:
+                return
+            mcturtles[args[1]].forward(disance)
+            chatWithSuper("Moved Turtle " + args[1] + " forward by " + args[2], super)
+        else:
+            if super is None:
+                print '\033[0;31;40m',
+                print "Turtle " + args[1] + " doesn't exists.",
+                print '\033[0m'
+                return
+            trystop(super)
+            chatWithSuper("Turtle " + args[1] + " doesn't exists.", super)
+            return
+    elif args[0] == "home":
+        if not (len(args) == 2):
+            invalid(super)
+            return
+        if args[1] in mcturtles.keys():
+            mcturtles[args[1]].home()
+            chatWithSuper("Resat Turtle " + args[1] + "\'s position.", super)
+        else:
+            if super is None:
+                print '\033[0;31;40m',
+                print "Turtle " + args[1] + " doesn't exists.",
+                print '\033[0m'
+                return
+            trystop(super)
+            chatWithSuper("Turtle " + args[1] + " doesn't exists.", super)
+            return
+    elif args[0] == "left":
+        if not (len(args) == 3):
+            invalid(super)
+            return
+        if args[1] in mcturtles.keys():
+            angle = tofloat(args[2], super)
+            if angle <= -1:
+                return
+            mcturtles[args[1]].left(angle)
+            chatWithSuper("Rotated Turtle " + args[1] + " left by " + args[2], super)
+        else:
+            if super is None:
+                print '\033[0;31;40m',
+                print "Turtle " + args[1] + " doesn't exists.",
+                print '\033[0m'
+                return
+            trystop(super)
+            chatWithSuper("Turtle " + args[1] + " doesn't exists.", super)
+            return
+    elif args[0] == "penblock":
+        if not (len(args) == 3 or len(args) == 4):
+            invalid(super)
+            return
+        if args[1] in mcturtles.keys():
+            block = getblock(args[2], super)
+            if block <= -1:
+                return
+            if len(args) == 4:
+                special = toint(args[3], 0, 15, super)
+                if special <= -1:
+                    return
+            else:
+                special = 0
+            mcturtles[args[1]].penblock(block, special)
+            chatWithSuper("Sat Turtle " + args[1] + "\'s pen to Block (" + args[2] + ", " + str(special) + ") .", super)
+        else:
+            if super is None:
+                print '\033[0;31;40m',
+                print "Turtle " + args[1] + " doesn't exists.",
+                print '\033[0m'
+                return
+            trystop(super)
+            chatWithSuper("Turtle " + args[1] + " doesn't exists.", super)
+            return
+    elif args[0] == "pendown":
+        if not (len(args) == 2):
+            invalid(super)
+            return
+        if args[1] in mcturtles.keys():
+            mcturtles[args[1]].pendown()
+            chatWithSuper("Put Turtle " + args[1] + "\'s pen down.", super)
+        else:
+            if super is None:
+                print '\033[0;31;40m',
+                print "Turtle " + args[1] + " doesn't exists.",
+                print '\033[0m'
+                return
+            trystop(super)
+            chatWithSuper("Turtle " + args[1] + " doesn't exists.", super)
+            return
+    elif args[0] == "penup":
+        if not (len(args) == 2):
+            invalid(super)
+            return
+        if args[1] in mcturtles.keys():
+            mcturtles[args[1]].penup()
+            chatWithSuper("Put Turtle " + args[1] + "\'s pen up.", super)
+        else:
+            if super is None:
+                print '\033[0;31;40m',
+                print "Turtle " + args[1] + " doesn't exists.",
+                print '\033[0m'
+                return
+            trystop(super)
+            chatWithSuper("Turtle " + args[1] + " doesn't exists.", super)
+            return
+    elif args[0] == "right":
+        if not (len(args) == 3):
+            invalid(super)
+            return
+        if args[1] in mcturtles.keys():
+            angle = tofloat(args[2], super)
+            if angle <= -1:
+                return
+            mcturtles[args[1]].right(angle)
+            chatWithSuper("Rotated Turtle " + args[1] + " right by " + args[2], super)
+        else:
+            if super is None:
+                print '\033[0;31;40m',
+                print "Turtle " + args[1] + " doesn't exists.",
+                print '\033[0m'
+                return
+            trystop(super)
+            chatWithSuper("Turtle " + args[1] + " doesn't exists.", super)
+            return
+    elif args[0] == "setHorizontalHeading":
+        if not (len(args) == 3):
+            invalid(super)
+            return
+        if args[1] in mcturtles.keys():
+            angle = tofloat(args[2], super)
+            if angle <= -1:
+                return
+            mcturtles[args[1]].setheading(angle)
+            chatWithSuper("Sat Turtle " + args[1] + "\'s horizontal heading to " + args[2], super)
+        else:
+            if super is None:
+                print '\033[0;31;40m',
+                print "Turtle " + args[1] + " doesn't exists.",
+                print '\033[0m'
+                return
+            trystop(super)
+            chatWithSuper("Turtle " + args[1] + " doesn't exists.", super)
+            return
+    elif args[0] == "setVerticalHeading":
+        if not (len(args) == 3):
+            invalid(super)
+            return
+        if args[1] in mcturtles.keys():
+            angle = tofloat(args[2], super)
+            if angle <= -1:
+                return
+            mcturtles[args[1]].setverticalheading(angle)
+            chatWithSuper("Sat Turtle " + args[1] + "\'s vertical heading to " + args[2], super)
+        else:
+            if super is None:
+                print '\033[0;31;40m',
+                print "Turtle " + args[1] + " doesn't exists.",
+                print '\033[0m'
+                return
+            trystop(super)
+            chatWithSuper("Turtle " + args[1] + " doesn't exists.", super)
+            return
+    elif args[0] == "setposition":
+        if not (len(args) == 5):
+            invalid(super)
+            return
+        if args[1] in mcturtles.keys():
+            vec = getvec(args[2], args[3], args[4], False, super)
+            if not vec:
+                return
+            mcturtles[args[1]].setposition(vec[0], vec[1], vec[2])
+            chatWithSuper("Sat Turtle " + args[1] + "\'s position to (" + args[2] + ", " + args[3] + ", " + args[4] + ") .", super)
+        else:
+            if super is None:
+                print '\033[0;31;40m',
+                print "Turtle " + args[1] + " doesn't exists.",
+                print '\033[0m'
+                return
+            trystop(super)
+            chatWithSuper("Turtle " + args[1] + " doesn't exists.", super)
+            return
+    elif args[0] == "setx":
+        if not (len(args) == 3):
+            invalid(super)
+            return
+        if args[1] in mcturtles.keys():
+            pos = toint(args[2], -128, 128, super)
+            if pos <= -1:
+                return
+            mcturtles[args[1]].setx(pos)
+            chatWithSuper("Sat Turtle " + args[1] + "\'s x position to " + args[2] + ".", super)
+        else:
+            if super is None:
+                print '\033[0;31;40m',
+                print "Turtle " + args[1] + " doesn't exists.",
+                print '\033[0m'
+                return
+            trystop(super)
+            chatWithSuper("Turtle " + args[1] + " doesn't exists.", super)
+            return
+    elif args[0] == "sety":
+        if not (len(args) == 3):
+            invalid(super)
+            return
+        if args[1] in mcturtles.keys():
+            pos = toint(args[2], -64, 64, super)
+            if pos <= -1:
+                return
+            mcturtles[args[1]].sety(pos)
+            chatWithSuper("Sat Turtle " + args[1] + "\'s y position to " + args[2] + ".", super)
+        else:
+            if super is None:
+                print '\033[0;31;40m',
+                print "Turtle " + args[1] + " doesn't exists.",
+                print '\033[0m'
+                return
+            trystop(super)
+            chatWithSuper("Turtle " + args[1] + " doesn't exists.", super)
+            return
+    elif args[0] == "setz":
+        if not (len(args) == 3):
+            invalid(super)
+            return
+        if args[1] in mcturtles.keys():
+            pos = toint(args[2], -128, 128, super)
+            if pos <= -1:
+                return
+            mcturtles[args[1]].setz(pos)
+            chatWithSuper("Sat Turtle " + args[1] + "\'s z position to " + args[2] + ".", super)
+        else:
+            if super is None:
+                print '\033[0;31;40m',
+                print "Turtle " + args[1] + " doesn't exists.",
+                print '\033[0m'
+                return
+            trystop(super)
+            chatWithSuper("Turtle " + args[1] + " doesn't exists.", super)
+            return
+    elif args[0] == "speed":
+        if not (len(args) == 3):
+            invalid(super)
+            return
+        if args[1] in mcturtles.keys():
+            speed = toint(args[2], 0, 10, super)
+            if speed <= -1:
+                return
+            mcturtles[args[1]].speed(speed)
+            chatWithSuper("Sat Turtle " + args[1] + "\'s speed to " + args[2] + ".", super)
+        else:
+            if super is None:
+                print '\033[0;31;40m',
+                print "Turtle " + args[1] + " doesn't exists.",
+                print '\033[0m'
+                return
+            trystop(super)
+            chatWithSuper("Turtle " + args[1] + " doesn't exists.", super)
+            return
+    elif args[0] == "up":
+        if not (len(args) == 3):
+            invalid(super)
+            return
+        if args[1] in mcturtles.keys():
+            angle = tofloat(args[2], super)
+            if angle <= -1:
+                return
+            mcturtles[args[1]].up(angle)
+            chatWithSuper("Rotated Turtle " + args[1] + " up by " + args[2], super)
+        else:
+            if super is None:
+                print '\033[0;31;40m',
+                print "Turtle " + args[1] + " doesn't exists.",
+                print '\033[0m'
+                return
+            trystop(super)
+            chatWithSuper("Turtle " + args[1] + " doesn't exists.", super)
+            return
+    elif args[0] == "walk":
+        if not (len(args) == 2):
+            invalid(super)
+            return
+        if args[1] in mcturtles.keys():
+            mcturtles[args[1]].walk()
+            chatWithSuper("Sat Turtle " + args[1] + " walk.", super)
+        else:
+            if super is None:
+                print '\033[0;31;40m',
+                print "Turtle " + args[1] + " doesn't exists.",
+                print '\033[0m'
+                return
+            trystop(super)
+            chatWithSuper("Turtle " + args[1] + " doesn't exists.", super)
+            return
+    elif args[0] == "remove":
+        if not (len(args) == 2):
+            invalid(super)
+            return
+        if args[1] in mcturtles.keys():
+            del mcturtles[args[1]]
+            chatWithSuper("Removed Turtle " + args[1] + ".", super)
+        else:
+            if super is None:
+                print '\033[0;31;40m',
+                print "Turtle " + args[1] + " doesn't exists.",
+                print '\033[0m'
+                return
+            trystop(super)
+            chatWithSuper("Turtle " + args[1] + " doesn't exists.", super)
+            return
+    elif args[0] == "removeAll":
+        if not (len(args) == 1):
+            invalid(super)
+            return
+        if args[1] in mcturtles.keys():
+            mcturtles.clear()
+            chatWithSuper("Removed all turtles.", super)
+        else:
+            if super is None:
+                print '\033[0;31;40m',
+                print "Turtle " + args[1] + " doesn't exists.",
+                print '\033[0m'
+                return
+            trystop(super)
+            chatWithSuper("Turtle " + args[1] + " doesn't exists.", super)
+            return
+    elif args[0] == "list":
+        if not (len(args) == 1):
+            invalid(super)
+            return
+        if not (super is None):
+            trystop(super)
+            chatWithSuper("Cannot use /turtle list in a function or a thread.", super)
+            return
+        print '\033[0;32;40m', "-------- Showing list of threads --------"
+        print " Turtle Name     Pen Status", '\033[0m'
+        for turtle in mcturtles.keys():
+            print " " + turtle.ljust(15),
+            if mcturtles[turtle].isdown():
+                print "Down"
+            else:
+                print "Up"
 
 
 def draw(args, super):
@@ -645,6 +1529,7 @@ def clear(args, super):
 
 
 def help(args, super):
+    global page
     if not (super is None):
         trystop(super)
         chatWithSuper("Cannot use /help in a function or a thread.", super)
@@ -712,7 +1597,7 @@ def help(args, super):
             elif args[0] == "setplayername":
                 print '\033[0;33;40m',
                 print "setplayername:"
-                print " Changes the player's name to another name."
+                print " Changes the player\'s name to another name."
                 print '\033[0m',
                 print "Usage:"
                 print " - /setplayername [newPlayerName: string]"
@@ -730,7 +1615,7 @@ def help(args, super):
                 print '\033[0m',
                 print "Usage:"
                 print " - /setting"
-                print " - /setting <setting: string> <status: boolean>"
+                print " - /setting <setting: string> <status: bool>"
             elif args[0] == "draw":
                 print '\033[0;33;40m',
                 print "draw:"
@@ -740,23 +1625,78 @@ def help(args, super):
                 print '\033[0m',
                 print "Usage:"
                 print " - /draw circle <position: x0 y0 z> <radius: int> <tileName: string | tileId: int> [tileData: int]"
-                print " - /draw face <<position1: x1 y1 z1> [position2: x2 y2 z2] [position3: x3 y3 z3] ...> <filled: boolean> <tileName: string | tileId: int> [tileData: int]"
+                print " - /draw face <<position1: x1 y1 z1> [position2: x2 y2 z2] [position3: x3 y3 z3] ...> <filled: bool> <tileName: string | tileId: int> [tileData: int]"
                 print " - /draw hollowSphere <position: x y z> <radius: int> <tileName: string | tileId: int> [tileData: int]"
                 print " - /draw horizontalCircle <position: x0 y z0> <radius: int> <tileName: string | tileId: int> [tileData: int]"
                 print " - /draw line <position1: x1 y1 z1> <position2: x2 y2 z2> <tileName: string | tileId: int> [tileData: int]"
                 print " - /draw point <position: x y z> <tileName: string | tileId: int> [tileData: int]"
                 print " - /draw sphere <position: x y z> <radius: int> <tileName: string | tileId: int> [tileData: int]"
                 print " - /draw vertices <<position1: x1 y1 z1> [position2: x2 y2 z2] [position3: x3 y3 z3] ...> <tileName: string | tileId: int> [tileData: int]"
+            elif args[0] == "shape":
+                print '\033[0;33;40m',
+                print "shape:"
+                print " Creates and manipulates shapes."
+                if disablems:
+                    print '\033[0;33;40m', "Tip: this command is now unavailable."
+                print '\033[0m',
+                print "Usage:"
+                print " - /shape add <shapeName: string> <position: x y z> [visible: bool] [<shapeBlocksFrom: x1 y1 z1> <shapeBlocksTo: x2 y2 z2>]"
+                print " - /shape clear <shapeName: string>"
+                print " - /shape clearAll"
+                print " - /shape draw <shapeName: string>"
+                print " - /shape list"
+                print " - /shape move <shapeName: string> <position: x y z>"
+                print " - /shape moveBy <shapeName: string> <relativePosition: x0 y0 z0>"
+                print " - /shape redraw <shapeName: string>"
+                print " - /shape remove <shapeName: string>"
+                print " - /shape removeAll"
+                print " - /shape reset <shapeName: string>"
+                print " - /shape rotate <x-rot: rotation> <y-rot: rotation> <z-rot: rotation>"
+                print " - /shape rotateBy <relativeX-rot: rotation> <relativeY-rot: rotation> <relativeZ-rot: rotation>"
+                print " - /shape setblock <position: x y z> <tileName: string | tileId: int> [tileData: int]"
+                print " - /shape fill | setblocks <from: x1 y1 z1> <to: x2 y2 z2> <tileName: string | tileId: int> [tileData: int]"
+            elif args[0] == "turtle":
+                print '\033[0;33;40m',
+                print "turtle:"
+                print " Creates and manipulates graphics turtle."
+                if disablems:
+                    print '\033[0;33;40m', "Tip: this command is now unavailable."
+                print '\033[0m',
+                print "Usage:"
+                print " - /turtle add <turtleName: string> <position: x y z>"
+                print " - /turtle backward <turtleName: string> <distance: int>"
+                print " - /turtle down <turtleName: string> <angle: float>"
+                print " - /turtle fly <turtleName: string>"
+                print " - /turtle forward <turtleName: string> <distance: int>"
+                print " - /turtle home <turtleName: string>"
+                print " - /turtle left <turtleName: string> <angle: float>"
+                print " - /turtle list"
+                print " - /turtle penblock <turtleName: string> <tileName: string | tileId: int> [tileData: int]"
+                print " - /turtle pendown <turtleName: string>"
+                print " - /turtle penup <turtleName: string>"
+                print " - /turtle remove <turtleName: string>"
+                print " - /turtle removeAll"
+                print " - /turtle right <turtleName: string> <angle: float>"
+                print " - /turtle setHorizontalHeading <turtleName: string> <angle: float>"
+                print " - /turtle setposition <turtleName: string> <position: x y z>"
+                print " - /turtle setVerticalHeading <turtleName: string> <angle: float>"
+                print " - /turtle setx <turtleName: string> <x: int>"
+                print " - /turtle sety <turtleName: string> <y: int>"
+                print " - /turtle setz <turtleName: string> <z: int>"
+                print " - /turtle speed <turtleName: string> <turtlespeed: int>"
+                print " - /turtle up <turtleName: string> <angle: float>"
+                print " - /turtle walk <turtleName: string>"
             elif args[0] == "thread":
                 print '\033[0;33;40m',
                 print "thread:"
-                print " Manages threads to do something looped in cycles."
+                print " Creates and manipulates command threads."
                 print '\033[0m',
                 print "Usage:"
-                print " - /thread add <threadName: string> <sleepTime: int> <command: stirng>"
-                print " - /thread clear"
+                print " - /thread add <threadName: string> <cycle: bool> <sleepTime: int> <command: stirng>"
                 print " - /thread list"
                 print " - /thread remove <threadName: string>"
+                print " - /thread removeAll"
+                print " - /thread setcycle <threadName: string> <cycle: bool>"
                 print " - /thread setsleep <threadName: string> <sleepTime: int>"
                 print " - /thread start <threadName: string>"
                 print " - /thread stop <threadName: string>"
@@ -770,6 +1710,21 @@ def help(args, super):
                 print " - /camera follow [entityId: int]"
                 print " - /camera normal [entityId: int]"
                 print " - /camera pos <position: x y z>"
+            elif args[0] == "function":
+                print '\033[0;33;40m',
+                print "function:"
+                print " Runs a function in a file."
+                print '\033[0m',
+                print "Usage:"
+                print " - /function [namespace: string]:<functionName: string>"
+            elif args[0] == "exit":
+                print '\033[0;33;40m',
+                print "exit:"
+                print " Stop running function."
+                print '\033[0;34;40m', "This command is for function."
+                print '\033[0m',
+                print "Usage:"
+                print " - /exit"
             else:
                 print '\033[0;31;40m',
                 print "The command is defined.",
@@ -784,32 +1739,80 @@ def help(args, super):
                 print " /camera pos <position: x y z>"
                 print " /clear"
                 print " /fill <from: x y z> <to: x y z> <tileName: string | tileId: int> [tileData: int]"
-                print " /help [command: string | page: int]"
+                print " /function [namespace: string]:<functionName: string>"
             elif page == 2:
-                print '\033[0m', "/me <action: string>"
+                print '\033[0m', "/help [command: string | page: int]"
+                print " /me <action: string>"
                 print " /say <message: string>"
                 print " /setblock <position: x y z> <tileName: string | tileId: int> [tileData: int]"
                 print " /setplayername [newPlayerName: string]"
-                print " /setting [<setting: string> <status: boolean>]"
-                print " /thread add <threadName: string> <sleepTime: int> <command: stirng>"
-                print " /thread clear"
+                print " /setting [<setting: string> <status: bool>]"
+                print " /thread add <threadName: string> <cycle: bool> <sleepTime: int> <command: stirng>"
             elif page == 3:
                 print '\033[0m', "/thread list"
                 print " /thread remove <threadName: string>"
+                print " /thread removeAll"
+                print " /thread setsleep <threadName: string> <cycle: bool>"
                 print " /thread setsleep <threadName: string> <sleepTime: int>"
                 print " /thread start <threadName: string>"
                 print " /thread stop <threadName: string>"
-                print " /tp <destination: x y z>"
-                print '\033[0;33;40m', "/draw circle <position: x0 y0 z> <radius: int> <tileName: string | tileId: int> [tileData: int]", '\033[0m'
             elif page == 4:
-                print '\033[0;33;40m', "/draw face <<position1: x1 y1 z1> [position2: x2 y2 z2] [position3: x3 y3 z3] ...> <filled: boolean> <tileName: string | tileId: int> [tileData: int]", '\033[0m'
+                print '\033[0m', "/tp <destination: x y z>"
+                print '\033[0;33;40m', "/draw circle <position: x0 y0 z> <radius: int> <tileName: string | tileId: int> [tileData: int]", '\033[0m'
+                print '\033[0;33;40m', "/draw face <<position1: x1 y1 z1> [position2: x2 y2 z2] [position3: x3 y3 z3] ...> <filled: bool> <tileName: string | tileId: int> [tileData: int]", '\033[0m'
                 print '\033[0;33;40m', "/draw hollowSphere <position: x y z> <radius: int> <tileName: string | tileId: int> [tileData: int]", '\033[0m'
                 print '\033[0;33;40m', "/draw horizontalCircle <position: x0 y z0> <radius: int> <tileName: string | tileId: int> [tileData: int]", '\033[0m'
                 print '\033[0;33;40m', "/draw line <position1: x1 y1 z1> <position2: x2 y2 z2> <tileName: string | tileId: int> [tileData: int]", '\033[0m'
                 print '\033[0;33;40m', "/draw point <position: x y z> <tileName: string | tileId: int> [tileData: int]", '\033[0m'
+            elif page == 5:
                 print '\033[0;33;40m', "/draw sphere <position: x y z> <radius: int> <tileName: string | tileId: int> [tileData: int]", '\033[0m'
                 print '\033[0;33;40m', "/draw vertices <<position1: x1 y1 z1> [position2: x2 y2 z2] [position3: x3 y3 z3] ...> <tileName: string | tileId: int> [tileData: int]", '\033[0m'
+                print '\033[0;33;40m', "/shape add <shapeName: string> <position: x y z> [visible: bool] [<shapeBlocksFrom: x1 y1 z1> <shapeBlocksTo: x2 y2 z2>]", '\033[0m'
+                print '\033[0;33;40m', "/shape clear <shapeName: string>", '\033[0m'
+                print '\033[0;33;40m', "/shape clearAll"
+                print '\033[0;33;40m', "/shape draw <shapeName: string>", '\033[0m'
+                print '\033[0;33;40m', "/shape list"
+            elif page == 6:
+                print '\033[0;33;40m', "/shape move <shapeName: string> <position: x y z>", '\033[0m'
+                print '\033[0;33;40m', "/shape moveBy <shapeName: string> <relativePosition: x0 y0 z0>", '\033[0m'
+                print '\033[0;33;40m', "/shape redraw <shapeName: string>", '\033[0m'
+                print '\033[0;33;40m', "/shape remove <shapeName: string>", '\033[0m'
+                print '\033[0;33;40m', "/shape removeAll"
+                print '\033[0;33;40m', "/shape reset <shapeName: string>", '\033[0m'
+                print '\033[0;33;40m', "/shape rotate <x-rot: rotation> <y-rot: rotation> <z-rot: rotation>", '\033[0m'
+            elif page == 7:
+                print '\033[0;33;40m', "/shape rotateBy <relativeX-rot: rotation> <relativeY-rot: rotation> <relativeZ-rot: rotation>", '\033[0m'
+                print '\033[0;33;40m', "/shape setblock <position: x y z> <tileName: string | tileId: int> [tileData: int]", '\033[0m'
+                print '\033[0;33;40m', "/shape fill | setblocks <from: x1 y1 z1> <to: x2 y2 z2> <tileName: string | tileId: int> [tileData: int]", '\033[0m'
+                print '\033[0;33;40m', "/turtle add <turtleName: string> <position: x y z>", '\033[0m'
+                print '\033[0;33;40m', "/turtle backward <turtleName: string> <distance: int>", '\033[0m'
+                print '\033[0;33;40m', "/turtle down <turtleName: string> <angle: float>", '\033[0m'
+                print '\033[0;33;40m', "/turtle fly <turtleName: string>", '\033[0m'
+            elif page == 8:
+                print '\033[0;33;40m', "/turtle forward <turtleName: string> <distance: int>", '\033[0m'
+                print '\033[0;33;40m', "/turtle home <turtleName: string>", '\033[0m'
+                print '\033[0;33;40m', "/turtle left <turtleName: string> <angle: float>", '\033[0m'
+                print '\033[0;33;40m', "/turtle list"
+                print '\033[0;33;40m', "/turtle penblock <turtleName: string> <tileName: string | tileId: int> [tileData: int]", '\033[0m'
+                print '\033[0;33;40m', "/turtle pendown <turtleName: string>", '\033[0m'
+                print '\033[0;33;40m', "/turtle penup <turtleName: string>", '\033[0m'
+            elif page == 9:
+                print '\033[0;33;40m', "/turtle remove <turtleName: string>", '\033[0m'
+                print '\033[0;33;40m', "/turtle removeAll"
+                print '\033[0;33;40m', "/turtle right <turtleName: string> <angle: float>", '\033[0m'
+                print '\033[0;33;40m', "/turtle setHorizontalHeading <turtleName: string> <angle: float>", '\033[0m'
+                print '\033[0;33;40m', "/turtle setposition <turtleName: string> <position: x y z>", '\033[0m'
+                print '\033[0;33;40m', "/turtle setVerticalHeading <turtleName: string> <angle: float>", '\033[0m'
+                print '\033[0;33;40m', "/turtle setx <turtleName: string> <x: int>", '\033[0m'
+            elif page == 10:
+                print '\033[0;33;40m', "/turtle sety <turtleName: string> <y: int>", '\033[0m'
+                print '\033[0;33;40m', "/turtle setz <turtleName: string> <z: int>", '\033[0m'
+                print '\033[0;33;40m', "/turtle speed <turtleName: string> <turtlespeed: int>", '\033[0m'
+                print '\033[0;33;40m', "/turtle up <turtleName: string> <angle: float>", '\033[0m'
+                print '\033[0;33;40m', "/turtle walk <turtleName: string>", '\033[0m'
+                print '\033[0;34;40m', "/exit", '\033[0m'
             print '\033[0;32;40m', "Tip: " + '\033[0;33;40m' + "yellow" + '\033[0;32;40m' + " commands are add-ons' commands.", '\033[0m'
+            print '\033[0;34;40m', "     " + "blue" + '\033[0;32;40m' + " commands are for function.", '\033[0m'
 
 
 def setplayername(args, super):
@@ -824,7 +1827,7 @@ def setplayername(args, super):
                 return
         else:
             playerName = "Player"
-        chatWithSuper("Player's name changed to \"" + playerName + "\" successfully", super)
+        chatWithSuper("Player\'s name changed to \"" + playerName + "\" successfully", super)
 
 
 def merge(args):
@@ -938,6 +1941,12 @@ def switchcommand(args, super):
         thread(args[1:], super)
     elif args[0] == "camera":
         camera(args[1:], super)
+    elif args[0] == "shape":
+        shape(args[1:], super)
+    elif args[0] == "turtle":
+        turtle(args[1:], super)
+    elif args[0] == "function":
+        function(args[1:], super)
     else:
         if super is None:
             print '\033[0;31;40m',
@@ -955,7 +1964,7 @@ def invalid(super):
         print '\033[0m'
     else:
         trystop(super)
-        chatWithSuper("Invalid command syntax",super)
+        chatWithSuper("Invalid command syntax", super)
 
 
 def toomin(num, min, super):
