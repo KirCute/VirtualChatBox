@@ -3,8 +3,15 @@ import socket
 import sys
 import time
 import threading
-from mcpi import minecraft, block, vec3
 
+try:
+    from mcpi import minecraft, block, vec3
+except ImportError:
+    print '\033[0;33;40m',
+    print "Warning: You haven't minecraft-pi yet."
+    print " Only in getting minecraft-pi can you run Virtual Chat Box.",
+    print '\033[0m'
+    sys.exit(1)
 disablems = True
 try:
     import minecraftstuff
@@ -16,10 +23,10 @@ except ImportError:
     print " Try \"sudo pip install minecraftstuff\" to get it.",
     print '\033[0m'
 
-gpiomode = 0
+disablegpio = True
 try:
     import RPi.GPIO
-    gpiomode = RPi.GPIO.BOARD
+    disablegpio = False
 except ImportError:
     print '\033[0;33;40m',
     print "Warning: Package \"RPi.GPIO\" is defined."
@@ -58,8 +65,9 @@ if not disablems:
 if not os.path.exists("functions"):
     os.mkdir("functions")
 threads = {}
-helpPageCount = 10
+helpPageCount = 12
 playerName = "Player"
+msgChat = True
 blockDictionary = {
     "air": block.AIR,
     "stone": block.STONE,
@@ -208,8 +216,253 @@ blockDictionary = {
 }
 
 
+def ifdo(args, super):
+    if (len(args) < 4) or (not args[0].startswith("$")):
+        invalid(super)
+        return False
+    sele = selector(args[0][1:], super)
+    if sele == -1024:
+        return False
+    if args[2].startswith("$"):
+        num = selector(args[2][1:], super)
+        if not (type(sele) == type(num)):
+            invalid(super)
+            return False
+    elif type(sele) == int:
+        num = toint(args[2], -256, 256, super)
+        if num <= -257:
+            return False
+    elif type(sele) == float:
+        num = tofloat(args[2], super, -1025)
+        if num <= -1025:
+            return False
+    elif type(sele) == str:
+        num = args[2]
+    else:
+        invalid(super)
+        return False
+    command = tocommand(args[3:])
+    if args[1] == "=":
+        if sele == num:
+            readCommand(command, super)
+            return True
+        return False
+    else:
+        if type(sele) == str or type(num) == str:
+            invalid(super)
+            return False
+        if args[1] == "<":
+            if sele < num:
+                readCommand(command, super)
+                return True
+            return False
+        elif args[1] == ">":
+            if sele > num:
+                readCommand(command, super)
+                return True
+            return False
+        elif args[1] == "<=":
+            if sele <= num:
+                readCommand(command, super)
+                return True
+            return False
+        elif args[1] == ">=":
+            if sele >= num:
+                readCommand(command, super)
+                return True
+            return False
+        else:
+            invalid(super)
+            return False
+
+
+def loop(args, super):
+    if len(args) < 2:
+        invalid(super)
+        return
+    if args[0] == "times":
+        if len(args) < 3:
+            invalid(super)
+            return
+        times = toint(args[1], 0, 256, super)
+        if times == -1:
+            return
+        command = tocommand(args[2:])
+        while times > 0:
+            readCommand(command, super)
+            times -= 1
+    elif args[0] == "if":
+        while ifdo(args[1:], super):
+            pass
+    else:
+        invalid(super)
+        return
+
+
+def selector(argv, super):
+    if argv.startswith("playerPosX"):
+        if len(argv) == 10:
+            return mc.player.getPos().x
+        else:
+            invalid(super)
+            return -1024
+    elif argv.startswith("playerPosY"):
+        if len(argv) == 10:
+            return mc.player.getPos().y
+        else:
+            invalid(super)
+            return -1024
+    elif argv.startswith("playerPosZ"):
+        if len(argv) == 10:
+            return mc.player.getPos().z
+        else:
+            invalid(super)
+            return -1024
+    elif argv.startswith("playerPosX_int"):
+        if len(argv) == 10:
+            return int(mc.player.getPos().x)
+        else:
+            invalid(super)
+            return -1024
+    elif argv.startswith("playerPosY_int"):
+        if len(argv) == 10:
+            return int(mc.player.getPos().y)
+        else:
+            invalid(super)
+            return -1024
+    elif argv.startswith("playerPosZ_int"):
+        if len(argv) == 10:
+            return int(mc.player.getPos().z)
+        else:
+            invalid(super)
+            return -1024
+    elif argv.startswith("playerName"):
+        if len(argv) == 10:
+            return playerName
+        else:
+            invalid(super)
+            return -1024
+    elif argv.startswith("height("):
+        if ("," in argv) and (argv.endswith(")")) and (len(argv) >= 11):
+            argva = argv[7:argv.find(",")]
+            argvb = argv[argv.find(",") + 1:-1]
+            a = toint(argva, -128, 128, super)
+            if a <= -256:
+                return -1025
+            b = toint(argvb, -128, 128, super)
+            if b <= -256:
+                return -1024
+            return mc.getHeight(a, b)
+        else:
+            invalid(super)
+            return -1024
+    else:
+        invalid(super)
+        return -1024
+
+
+def sleep(args, super):
+    if not (len(args) == 1):
+        invalid(super)
+        return
+    sleepTime = tofloat(args[0], super)
+    if sleepTime <= -1:
+        return
+    time.sleep(sleepTime / 20)
+
+
 def gpio(args, super):
-    pass
+    if len(args) == 0:
+        invalid(super)
+        return
+    if disablegpio:
+        if not (super is None):
+            trystop(super)
+            chatWithSuper("Package \"RPi.GPIO\" is defined, \"/gpio\" is not available.", super)
+            return
+        print '\033[0;33;40m',
+        print "Package \"RPi.GPIO\" is defined, \"/gpio\" is not available.",
+        print '\033[0m'
+        return
+    if args[0] == "mode":
+        if len(args) == 1:
+            if super is None:
+                print "bcm, board"
+                return
+            else:
+                trystop(super)
+                chatWithSuper("Cannot use /gpio mode in a function or a thread.", super)
+                return
+        if not (len(args) == 2):
+            invalid(super)
+            return
+        try:
+            if args[1] == "board":
+                RPi.GPIO.setmode(RPi.GPIO.BOARD)
+                chatWithSuper("Changed GPIO mode to BOARD successfully.", super)
+            elif args[1] == "bcm":
+                RPi.GPIO.setmode(RPi.GPIO.BCM)
+                chatWithSuper("Changed GPIO mode to BCM successfully.", super)
+            else:
+                invalid(super)
+                return
+        except ValueError:
+            if not (super is None):
+                trystop(super)
+                chatWithSuper("A different mode has already been set.", super)
+                return
+            print '\033[0;31;40m',
+            print "A different mode has already been set.",
+            print '\033[0m'
+            return
+    elif args[0] == "cleanup":
+        if not (len(args) == 2):
+            invalid(super)
+            return
+        channel = toint(args[1], 0, 29, super)
+        if channel <= -1:
+            return
+        RPi.GPIO.cleanup(channel)
+        chatWithSuper("Cleaned up Channel " + args[1] + " successfully.", super)
+    elif args[0] == "cleanupAll":
+        if not (len(args) == 1):
+            invalid(super)
+            return
+        RPi.GPIO.cleanup()
+        chatWithSuper("Cleaned up channels successfully.", super)
+    elif args[0] == "setup":
+        if not (len(args) == 3):
+            invalid(super)
+            return
+        mode = RPi.GPIO.IN
+        if args[2] == "out":
+            mode = RPi.GPIO.OUT
+        elif not (args[2] == "in"):
+            invalid(super)
+            return
+        channel = toint(args[1], 0, 29, super)
+        if channel <= -1:
+            return
+        RPi.GPIO.setup(channel, mode)
+        chatWithSuper("Sat up Channel " + args[1] + " successfully.", super)
+    elif args[0] == "output":
+        if not (len(args) == 3):
+            invalid(super)
+            return
+        mode = RPi.GPIO.LOW
+        if args[2] == "high":
+            mode = RPi.GPIO.HIGH
+        elif not (args[2] == "low"):
+            invalid(super)
+            return
+        channel = toint(args[1], 0, 29, super)
+        if channel <= -1:
+            return
+        RPi.GPIO.output(channel, mode)
+        chatWithSuper("Sat Channel " + args[1] + "\'s output to " + args[2] + " successfully.", super)
+    else:
+        invalid(super)
+        return
 
 
 def function(args, super):
@@ -251,13 +504,24 @@ def function(args, super):
             else:
                 funSuper = super + ".f_" + functionName
             chatWithSuper("Function " + functionName + " started to run.", super)
+            errorlevel = 0
             for command in commandLines:
-                if len(command) == 0 or command[0] == "#":
+                command = command.strip()
+                if not len(command) or command.startswith('#'):
                     continue
-                if command == "exit":
-                    break
+                if command.startswith("exit"):
+                    if len(command) == 4:
+                        break
+                    elif len(command) >= 6 and command.startswith("exit "):
+                        errorlevel = toint(command[5:], -256, 256, funSuper)
+                        if errorlevel <= -257:
+                            invalid(funSuper)
+                        break
                 readCommand(command, funSuper)
-            chatWithSuper("Function " + functionName + " finished.", super)
+            if errorlevel == 0:
+                chatWithSuper("Function " + functionName + " succeed.", super)
+            else:
+                chatWithSuper("Function " + functionName + " failed: " + str(errorlevel) + ".", super)
         else:
             if super is None:
                 print '\033[0;31;40m',
@@ -472,11 +736,12 @@ def trystop(super):
         threads[super[super.rfind("t_") + 2 : super.find(".", super.rfind("t_"))]].setpause()
 
 
-def chatWithSuper(msg, super):
-    if super is None:
-        mc.postToChat(msg)
-    else:
-        mc.postToChat("[" + superoutput(super) + "] " + msg)
+def chatWithSuper(msg, super, ismsg = True):
+    if (not ismsg) or msgChat:
+        if super is None:
+            mc.postToChat(msg)
+        else:
+            mc.postToChat("[" + superoutput(super) + "] " + msg)
 
 
 class CommandThread(threading.Thread):
@@ -838,12 +1103,12 @@ def shape(args, super):
         invalid(super)
 
 
-def tofloat(argv, super):
+def tofloat(argv, super, errorback = -1):
     try:
         return float(argv)
     except ValueError:
         invalid(super)
-        return -1
+        return errorback
 
 
 def turtle(args, super):
@@ -1140,7 +1405,7 @@ def turtle(args, super):
             return
         if args[1] in mcturtles.keys():
             pos = toint(args[2], -128, 128, super)
-            if pos <= -1:
+            if pos <= -256:
                 return
             mcturtles[args[1]].setx(pos)
             chatWithSuper("Sat Turtle " + args[1] + "\'s x position to " + args[2] + ".", super)
@@ -1178,7 +1443,7 @@ def turtle(args, super):
             return
         if args[1] in mcturtles.keys():
             pos = toint(args[2], -128, 128, super)
-            if pos <= -1:
+            if pos <= -256:
                 return
             mcturtles[args[1]].setz(pos)
             chatWithSuper("Sat Turtle " + args[1] + "\'s z position to " + args[2] + ".", super)
@@ -1496,7 +1761,7 @@ def setting(args, super):
     else:
         if len(args) == 0:
             if super is None:
-                print "autojump, nametags_visible, world_immutable"
+                print "autojump, nametags_visible, world_immutable, exec_message"
             else:
                 trystop(super)
                 chatWithSuper("Cannot use /setting in a function or a thread.", super)
@@ -1511,6 +1776,9 @@ def setting(args, super):
                 mc.setting("nametags_visible", setting)
             elif args[0] == "world_immutable":
                 mc.setting("world_immutable", setting)
+            elif args[0] == "exec_message":
+                global msgChat
+                msgChat = setting
             else:
                 invalid(super)
                 return
@@ -1616,6 +1884,21 @@ def help(args, super):
                 print "Usage:"
                 print " - /setting"
                 print " - /setting <setting: string> <status: bool>"
+            elif args[0] == "if":
+                print '\033[0;33;40m',
+                print "if:"
+                print " Do something if condition is established."
+                print '\033[0m',
+                print "Usage:"
+                print " - /if $<selector: string> < = | < | > | <= | >= > <thingToCompare: sameTypeAsSelector> <command: string>"
+            elif args[0] == "loop":
+                print '\033[0;33;40m',
+                print "loop:"
+                print " Do something repeated."
+                print '\033[0m',
+                print "Usage:"
+                print " - /loop if $<selector: string> < = | < | > | <= | >= > <thingToCompare: sameTypeAsSelector> <command: string>"
+                print " - /loop times <repeatTimes: int> <command: string>"
             elif args[0] == "draw":
                 print '\033[0;33;40m',
                 print "draw:"
@@ -1725,6 +2008,26 @@ def help(args, super):
                 print '\033[0m',
                 print "Usage:"
                 print " - /exit"
+            elif args[0] == "sleep":
+                print '\033[0;33;40m',
+                print "sleep:"
+                print " Delay for some time(for function and thread)."
+                print '\033[0m',
+                print "Usage:"
+                print " - /sleep <delayTime: float>"
+            elif args[0] == "gpio":
+                print '\033[0;33;40m',
+                print "gpio:"
+                print " Manipulates gpios."
+                if disablegpio:
+                    print '\033[0;33;40m', "Tip: this command is now unavailable."
+                print '\033[0m',
+                print "Usage:"
+                print " - /gpio cleanup <channel: int>"
+                print " - /gpio cleanupAll"
+                print " - /gpio mode [mode: string]"
+                print " - /gpio output <channel: int> <high | low>"
+                print " - /gpio setup <channel: int> <out | in>"
             else:
                 print '\033[0;31;40m',
                 print "The command is defined.",
@@ -1742,74 +2045,85 @@ def help(args, super):
                 print " /function [namespace: string]:<functionName: string>"
             elif page == 2:
                 print '\033[0m', "/help [command: string | page: int]"
+                print " /if $<selector: string> < = | < | > | <= | >= > <thingToCompare: sameTypeAsSelector> <command: string>"
+                print " /loop if $<selector: string> < = | < | > | <= | >= > <thingToCompare: sameTypeAsSelector> <command: string>"
+                print " /loop times <repeatTimes: int> <command: string>"
                 print " /me <action: string>"
                 print " /say <message: string>"
                 print " /setblock <position: x y z> <tileName: string | tileId: int> [tileData: int]"
-                print " /setplayername [newPlayerName: string]"
-                print " /setting [<setting: string> <status: bool>]"
-                print " /thread add <threadName: string> <cycle: bool> <sleepTime: int> <command: stirng>"
             elif page == 3:
-                print '\033[0m', "/thread list"
+                print '\033[0m', "/setplayername [newPlayerName: string]"
+                print " /setting [<setting: string> <status: bool>]"
+                print " /sleep <delayTime: float>"
+                print " /thread add <threadName: string> <cycle: bool> <sleepTime: int> <command: stirng>"
+                print " /thread list"
                 print " /thread remove <threadName: string>"
                 print " /thread removeAll"
-                print " /thread setsleep <threadName: string> <cycle: bool>"
+            elif page == 4:
+                print '\033[0m', "/thread setsleep <threadName: string> <cycle: bool>"
                 print " /thread setsleep <threadName: string> <sleepTime: int>"
                 print " /thread start <threadName: string>"
                 print " /thread stop <threadName: string>"
-            elif page == 4:
-                print '\033[0m', "/tp <destination: x y z>"
+                print " /tp <destination: x y z>"
                 print '\033[0;33;40m', "/draw circle <position: x0 y0 z> <radius: int> <tileName: string | tileId: int> [tileData: int]", '\033[0m'
                 print '\033[0;33;40m', "/draw face <<position1: x1 y1 z1> [position2: x2 y2 z2] [position3: x3 y3 z3] ...> <filled: bool> <tileName: string | tileId: int> [tileData: int]", '\033[0m'
+            elif page == 5:
                 print '\033[0;33;40m', "/draw hollowSphere <position: x y z> <radius: int> <tileName: string | tileId: int> [tileData: int]", '\033[0m'
                 print '\033[0;33;40m', "/draw horizontalCircle <position: x0 y z0> <radius: int> <tileName: string | tileId: int> [tileData: int]", '\033[0m'
                 print '\033[0;33;40m', "/draw line <position1: x1 y1 z1> <position2: x2 y2 z2> <tileName: string | tileId: int> [tileData: int]", '\033[0m'
                 print '\033[0;33;40m', "/draw point <position: x y z> <tileName: string | tileId: int> [tileData: int]", '\033[0m'
-            elif page == 5:
                 print '\033[0;33;40m', "/draw sphere <position: x y z> <radius: int> <tileName: string | tileId: int> [tileData: int]", '\033[0m'
                 print '\033[0;33;40m', "/draw vertices <<position1: x1 y1 z1> [position2: x2 y2 z2] [position3: x3 y3 z3] ...> <tileName: string | tileId: int> [tileData: int]", '\033[0m'
+                print '\033[0;33;40m', "/gpio cleanup <channel: int>", '\033[0m'
+            elif page == 6:
+                print '\033[0;33;40m', "/gpio cleanupAll", '\033[0m'
+                print '\033[0;33;40m', "/gpio mode [mode: string]", '\033[0m'
+                print '\033[0;33;40m', "/gpio output <channel: int> <high | low>", '\033[0m'
+                print '\033[0;33;40m', "/gpio setup <channel: int> <out | in>", '\033[0m'
                 print '\033[0;33;40m', "/shape add <shapeName: string> <position: x y z> [visible: bool] [<shapeBlocksFrom: x1 y1 z1> <shapeBlocksTo: x2 y2 z2>]", '\033[0m'
                 print '\033[0;33;40m', "/shape clear <shapeName: string>", '\033[0m'
-                print '\033[0;33;40m', "/shape clearAll"
+                print '\033[0;33;40m', "/shape clearAll", '\033[0m'
+            elif page == 7:
                 print '\033[0;33;40m', "/shape draw <shapeName: string>", '\033[0m'
-                print '\033[0;33;40m', "/shape list"
-            elif page == 6:
+                print '\033[0;33;40m', "/shape list", '\033[0m'
                 print '\033[0;33;40m', "/shape move <shapeName: string> <position: x y z>", '\033[0m'
                 print '\033[0;33;40m', "/shape moveBy <shapeName: string> <relativePosition: x0 y0 z0>", '\033[0m'
                 print '\033[0;33;40m', "/shape redraw <shapeName: string>", '\033[0m'
                 print '\033[0;33;40m', "/shape remove <shapeName: string>", '\033[0m'
-                print '\033[0;33;40m', "/shape removeAll"
+                print '\033[0;33;40m', "/shape removeAll", '\033[0m'
+            elif page == 8:
                 print '\033[0;33;40m', "/shape reset <shapeName: string>", '\033[0m'
                 print '\033[0;33;40m', "/shape rotate <x-rot: rotation> <y-rot: rotation> <z-rot: rotation>", '\033[0m'
-            elif page == 7:
                 print '\033[0;33;40m', "/shape rotateBy <relativeX-rot: rotation> <relativeY-rot: rotation> <relativeZ-rot: rotation>", '\033[0m'
                 print '\033[0;33;40m', "/shape setblock <position: x y z> <tileName: string | tileId: int> [tileData: int]", '\033[0m'
                 print '\033[0;33;40m', "/shape fill | setblocks <from: x1 y1 z1> <to: x2 y2 z2> <tileName: string | tileId: int> [tileData: int]", '\033[0m'
                 print '\033[0;33;40m', "/turtle add <turtleName: string> <position: x y z>", '\033[0m'
                 print '\033[0;33;40m', "/turtle backward <turtleName: string> <distance: int>", '\033[0m'
+            elif page == 9:
                 print '\033[0;33;40m', "/turtle down <turtleName: string> <angle: float>", '\033[0m'
                 print '\033[0;33;40m', "/turtle fly <turtleName: string>", '\033[0m'
-            elif page == 8:
                 print '\033[0;33;40m', "/turtle forward <turtleName: string> <distance: int>", '\033[0m'
                 print '\033[0;33;40m', "/turtle home <turtleName: string>", '\033[0m'
                 print '\033[0;33;40m', "/turtle left <turtleName: string> <angle: float>", '\033[0m'
-                print '\033[0;33;40m', "/turtle list"
+                print '\033[0;33;40m', "/turtle list", '\033[0m'
                 print '\033[0;33;40m', "/turtle penblock <turtleName: string> <tileName: string | tileId: int> [tileData: int]", '\033[0m'
+            elif page == 10:
                 print '\033[0;33;40m', "/turtle pendown <turtleName: string>", '\033[0m'
                 print '\033[0;33;40m', "/turtle penup <turtleName: string>", '\033[0m'
-            elif page == 9:
                 print '\033[0;33;40m', "/turtle remove <turtleName: string>", '\033[0m'
-                print '\033[0;33;40m', "/turtle removeAll"
+                print '\033[0;33;40m', "/turtle removeAll", '\033[0m'
                 print '\033[0;33;40m', "/turtle right <turtleName: string> <angle: float>", '\033[0m'
                 print '\033[0;33;40m', "/turtle setHorizontalHeading <turtleName: string> <angle: float>", '\033[0m'
                 print '\033[0;33;40m', "/turtle setposition <turtleName: string> <position: x y z>", '\033[0m'
+            elif page == 11:
                 print '\033[0;33;40m', "/turtle setVerticalHeading <turtleName: string> <angle: float>", '\033[0m'
                 print '\033[0;33;40m', "/turtle setx <turtleName: string> <x: int>", '\033[0m'
-            elif page == 10:
                 print '\033[0;33;40m', "/turtle sety <turtleName: string> <y: int>", '\033[0m'
                 print '\033[0;33;40m', "/turtle setz <turtleName: string> <z: int>", '\033[0m'
                 print '\033[0;33;40m', "/turtle speed <turtleName: string> <turtlespeed: int>", '\033[0m'
                 print '\033[0;33;40m', "/turtle up <turtleName: string> <angle: float>", '\033[0m'
                 print '\033[0;33;40m', "/turtle walk <turtleName: string>", '\033[0m'
+            elif page == 12:
                 print '\033[0;34;40m', "/exit", '\033[0m'
             print '\033[0;32;40m', "Tip: " + '\033[0;33;40m' + "yellow" + '\033[0;32;40m' + " commands are add-ons' commands.", '\033[0m'
             print '\033[0;34;40m', "     " + "blue" + '\033[0;32;40m' + " commands are for function.", '\033[0m'
@@ -1845,7 +2159,7 @@ def say(args, super):
         if super is None:
             mc.postToChat("[" + playerName + "]" + output)
         else:
-            chatWithSuper(output, super)
+            chatWithSuper(output, super, False)
 
 
 def me(args, super):
@@ -1947,6 +2261,17 @@ def switchcommand(args, super):
         turtle(args[1:], super)
     elif args[0] == "function":
         function(args[1:], super)
+    elif args[0] == "sleep":
+        sleep(args[1:], super)
+    elif args[0] == "gpio":
+        gpio(args[1:], super)
+    elif args[0] == "loop":
+        loop(args[1:], super)
+    elif args[0] == "if":
+        if ifdo(args[1:], super):
+            chatWithSuper("The command had enforced.", super)
+        else:
+            chatWithSuper("The command had not enforced.", super)
     else:
         if super is None:
             print '\033[0;31;40m',
@@ -2001,9 +2326,13 @@ def toint(intStr, min, max, super):
         res = int(intStr)
         if res < min:
             toomin(res, min, super)
+            if min < 0:
+                return -257
             return -1
         if res > max:
             toomax(res, max, super)
+            if min < 0:
+                return -257
             return -1
     except ValueError:
         invalid(super)
@@ -2156,6 +2485,11 @@ while True:
     if input == '\x1b':
         for name in threads:
             threads[name].stop()
+        if not disablegpio:
+            try:
+                RPi.GPIO.cleanup()
+            except RuntimeWarning:
+                pass
         break
     if len(input) == 0:
         continue

@@ -2,3 +2,5 @@
 say Hello, Minecraft
 say Hello, Minecraftpi
 say Hello, VirtualChatBox
+exit 0
+say You cannot see me, lol
