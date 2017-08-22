@@ -1,4 +1,5 @@
 import os
+import random
 import socket
 import sys
 import time
@@ -347,12 +348,51 @@ def selector(argv, super):
             argva = argv[7:argv.find(",")]
             argvb = argv[argv.find(",") + 1:-1]
             a = toint(argva, -128, 128, super)
-            if a <= -256:
+            if a <= -257:
                 return -1025
             b = toint(argvb, -128, 128, super)
-            if b <= -256:
-                return -1024
+            if b <= -257:
+                return -1025
             return mc.getHeight(a, b)
+        else:
+            invalid(super)
+            return -1024
+    elif argv.startswith("gpiomode"):
+        if len(argv) == 8:
+            if RPi.GPIO.getmode() == RPi.GPIO.BCM:
+                return "bcm"
+            elif RPi.GPIO.getmode() == RPi.GPIO.BOARD:
+                return "board"
+            else:
+                return "none"
+        else:
+            invalid(super)
+            return -1024
+    elif argv.startswith("random_int("):
+        if ("," in argv) and (argv.endswith(")")) and (len(argv) >= 15):
+            argva = argv[11:argv.find(",")]
+            argvb = argv[argv.find(",") + 1:-1]
+            a = toint(argva, -256, 256, super)
+            if a <= -257:
+                return -1024
+            b = toint(argvb, -256, 256, super)
+            if b <= -257:
+                return -1024
+            return random.randint(a, b)
+        else:
+            invalid(super)
+            return -1024
+    elif argv.startswith("random_float("):
+        if ("," in argv) and (argv.endswith(")")) and (len(argv) >= 15):
+            argva = argv[11:argv.find(",")]
+            argvb = argv[argv.find(",") + 1:-1]
+            a = tofloat(argva, super, "~")
+            if a == "~":
+                return -1024
+            b = tofloat(argvb, super, "~")
+            if b == "~":
+                return -1024
+            return random.uniform(a, b)
         else:
             invalid(super)
             return -1024
@@ -2028,6 +2068,20 @@ def help(args, super):
                 print " - /gpio mode [mode: string]"
                 print " - /gpio output <channel: int> <high | low>"
                 print " - /gpio setup <channel: int> <out | in>"
+            elif args[0] == "/saywos":
+                print '\033[0;33;40m',
+                print "saywos:"
+                print " Sends a message without sending super."
+                print '\033[0m',
+                print "Usage:"
+                print " - /saywos <speaker: string> <message: string>"
+            elif args[0] == "mewos":
+                print '\033[0;33;40m',
+                print "mewos:"
+                print " Makes an action without sending super."
+                print '\033[0m',
+                print "Usage:"
+                print " - /mewos <speaker: string> <action: string>"
             else:
                 print '\033[0;31;40m',
                 print "The command is defined.",
@@ -2049,7 +2103,9 @@ def help(args, super):
                 print " /loop if $<selector: string> < = | < | > | <= | >= > <thingToCompare: sameTypeAsSelector> <command: string>"
                 print " /loop times <repeatTimes: int> <command: string>"
                 print " /me <action: string>"
+                print " /mewos <speaker: string> <action: string>"
                 print " /say <message: string>"
+                print " /saywos <speaker: string> <message: string>"
                 print " /setblock <position: x y z> <tileName: string | tileId: int> [tileData: int]"
             elif page == 3:
                 print '\033[0m', "/setplayername [newPlayerName: string]"
@@ -2173,6 +2229,22 @@ def me(args, super):
             mc.postToChat("* " + superoutput(super) + output)
 
 
+def sayWithoutSuper(args, super):
+    if not (len(args) > 1):
+        invalid(super)
+    else:
+        output = merge(args[1:])
+        mc.postToChat("[" + args[0] + "]" + output)
+
+
+def meWithoutSuper(args, super):
+    if not (len(args) > 1):
+        invalid(super)
+    else:
+        output = merge(args[1:])
+        mc.postToChat("* " + args[0] + output)
+
+
 def teleport(args, super):
     if not (len(args) == 3):
         invalid(super)
@@ -2272,6 +2344,10 @@ def switchcommand(args, super):
             chatWithSuper("The command had enforced.", super)
         else:
             chatWithSuper("The command had not enforced.", super)
+    elif args[0] == "saywos":
+        sayWithoutSuper(args[1:], super)
+    elif args[0] == "mewos":
+        meWithoutSuper(args[1:], super)
     else:
         if super is None:
             print '\033[0;31;40m',
@@ -2353,7 +2429,7 @@ def tobool(argv, super):
 def getvec(x, y, z, isFloat, super):
     if isFloat:
         vec = [0, 0, 0]
-        if x[0] == "~":
+        if x.startswith("~"):
             try:
                 if len(x) == 1:
                     add = 0
@@ -2369,7 +2445,7 @@ def getvec(x, y, z, isFloat, super):
             except ValueError:
                 invalid(super)
                 return False
-        if y[0] == "~":
+        if y.startswith("~"):
             try:
                 if len(y) == 1:
                     add = 0
@@ -2385,7 +2461,7 @@ def getvec(x, y, z, isFloat, super):
             except ValueError:
                 invalid(super)
                 return False
-        if z[0] == "~":
+        if z.startswith("~"):
             try:
                 if len(z) == 1:
                     add = 0
