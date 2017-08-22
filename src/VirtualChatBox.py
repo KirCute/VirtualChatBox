@@ -2105,81 +2105,81 @@ def help(args, super):
                 print " /me <action: string>"
                 print " /mewos <speaker: string> <action: string>"
                 print " /say <message: string>"
-                print " /saywos <speaker: string> <message: string>"
-                print " /setblock <position: x y z> <tileName: string | tileId: int> [tileData: int]"
             elif page == 3:
-                print '\033[0m', "/setplayername [newPlayerName: string]"
+                print '\033[0m', " /saywos <speaker: string> <message: string>"
+                print " /setblock <position: x y z> <tileName: string | tileId: int> [tileData: int]"
+                print " /setplayername [newPlayerName: string]"
                 print " /setting [<setting: string> <status: bool>]"
                 print " /sleep <delayTime: float>"
                 print " /thread add <threadName: string> <cycle: bool> <sleepTime: int> <command: stirng>"
                 print " /thread list"
-                print " /thread remove <threadName: string>"
-                print " /thread removeAll"
             elif page == 4:
-                print '\033[0m', "/thread setsleep <threadName: string> <cycle: bool>"
+                print '\033[0m', "/thread remove <threadName: string>"
+                print " /thread removeAll"
+                print " /thread setsleep <threadName: string> <cycle: bool>"
                 print " /thread setsleep <threadName: string> <sleepTime: int>"
                 print " /thread start <threadName: string>"
                 print " /thread stop <threadName: string>"
                 print " /tp <destination: x y z>"
+            elif page == 5:
                 print '\033[0;33;40m', "/draw circle <position: x0 y0 z> <radius: int> <tileName: string | tileId: int> [tileData: int]", '\033[0m'
                 print '\033[0;33;40m', "/draw face <<position1: x1 y1 z1> [position2: x2 y2 z2] [position3: x3 y3 z3] ...> <filled: bool> <tileName: string | tileId: int> [tileData: int]", '\033[0m'
-            elif page == 5:
                 print '\033[0;33;40m', "/draw hollowSphere <position: x y z> <radius: int> <tileName: string | tileId: int> [tileData: int]", '\033[0m'
                 print '\033[0;33;40m', "/draw horizontalCircle <position: x0 y z0> <radius: int> <tileName: string | tileId: int> [tileData: int]", '\033[0m'
                 print '\033[0;33;40m', "/draw line <position1: x1 y1 z1> <position2: x2 y2 z2> <tileName: string | tileId: int> [tileData: int]", '\033[0m'
                 print '\033[0;33;40m', "/draw point <position: x y z> <tileName: string | tileId: int> [tileData: int]", '\033[0m'
                 print '\033[0;33;40m', "/draw sphere <position: x y z> <radius: int> <tileName: string | tileId: int> [tileData: int]", '\033[0m'
+            elif page == 6:
                 print '\033[0;33;40m', "/draw vertices <<position1: x1 y1 z1> [position2: x2 y2 z2] [position3: x3 y3 z3] ...> <tileName: string | tileId: int> [tileData: int]", '\033[0m'
                 print '\033[0;33;40m', "/gpio cleanup <channel: int>", '\033[0m'
-            elif page == 6:
                 print '\033[0;33;40m', "/gpio cleanupAll", '\033[0m'
                 print '\033[0;33;40m', "/gpio mode [mode: string]", '\033[0m'
                 print '\033[0;33;40m', "/gpio output <channel: int> <high | low>", '\033[0m'
                 print '\033[0;33;40m', "/gpio setup <channel: int> <out | in>", '\033[0m'
                 print '\033[0;33;40m', "/shape add <shapeName: string> <position: x y z> [visible: bool] [<shapeBlocksFrom: x1 y1 z1> <shapeBlocksTo: x2 y2 z2>]", '\033[0m'
+            elif page == 7:
                 print '\033[0;33;40m', "/shape clear <shapeName: string>", '\033[0m'
                 print '\033[0;33;40m', "/shape clearAll", '\033[0m'
-            elif page == 7:
                 print '\033[0;33;40m', "/shape draw <shapeName: string>", '\033[0m'
                 print '\033[0;33;40m', "/shape list", '\033[0m'
                 print '\033[0;33;40m', "/shape move <shapeName: string> <position: x y z>", '\033[0m'
                 print '\033[0;33;40m', "/shape moveBy <shapeName: string> <relativePosition: x0 y0 z0>", '\033[0m'
                 print '\033[0;33;40m', "/shape redraw <shapeName: string>", '\033[0m'
+            elif page == 8:
                 print '\033[0;33;40m', "/shape remove <shapeName: string>", '\033[0m'
                 print '\033[0;33;40m', "/shape removeAll", '\033[0m'
-            elif page == 8:
                 print '\033[0;33;40m', "/shape reset <shapeName: string>", '\033[0m'
                 print '\033[0;33;40m', "/shape rotate <x-rot: rotation> <y-rot: rotation> <z-rot: rotation>", '\033[0m'
                 print '\033[0;33;40m', "/shape rotateBy <relativeX-rot: rotation> <relativeY-rot: rotation> <relativeZ-rot: rotation>", '\033[0m'
                 print '\033[0;33;40m', "/shape setblock <position: x y z> <tileName: string | tileId: int> [tileData: int]", '\033[0m'
                 print '\033[0;33;40m', "/shape fill | setblocks <from: x1 y1 z1> <to: x2 y2 z2> <tileName: string | tileId: int> [tileData: int]", '\033[0m'
+            elif page == 9:
                 print '\033[0;33;40m', "/turtle add <turtleName: string> <position: x y z>", '\033[0m'
                 print '\033[0;33;40m', "/turtle backward <turtleName: string> <distance: int>", '\033[0m'
-            elif page == 9:
                 print '\033[0;33;40m', "/turtle down <turtleName: string> <angle: float>", '\033[0m'
                 print '\033[0;33;40m', "/turtle fly <turtleName: string>", '\033[0m'
                 print '\033[0;33;40m', "/turtle forward <turtleName: string> <distance: int>", '\033[0m'
                 print '\033[0;33;40m', "/turtle home <turtleName: string>", '\033[0m'
                 print '\033[0;33;40m', "/turtle left <turtleName: string> <angle: float>", '\033[0m'
+            elif page == 10:
                 print '\033[0;33;40m', "/turtle list", '\033[0m'
                 print '\033[0;33;40m', "/turtle penblock <turtleName: string> <tileName: string | tileId: int> [tileData: int]", '\033[0m'
-            elif page == 10:
                 print '\033[0;33;40m', "/turtle pendown <turtleName: string>", '\033[0m'
                 print '\033[0;33;40m', "/turtle penup <turtleName: string>", '\033[0m'
                 print '\033[0;33;40m', "/turtle remove <turtleName: string>", '\033[0m'
                 print '\033[0;33;40m', "/turtle removeAll", '\033[0m'
                 print '\033[0;33;40m', "/turtle right <turtleName: string> <angle: float>", '\033[0m'
+            elif page == 11:
                 print '\033[0;33;40m', "/turtle setHorizontalHeading <turtleName: string> <angle: float>", '\033[0m'
                 print '\033[0;33;40m', "/turtle setposition <turtleName: string> <position: x y z>", '\033[0m'
-            elif page == 11:
                 print '\033[0;33;40m', "/turtle setVerticalHeading <turtleName: string> <angle: float>", '\033[0m'
                 print '\033[0;33;40m', "/turtle setx <turtleName: string> <x: int>", '\033[0m'
                 print '\033[0;33;40m', "/turtle sety <turtleName: string> <y: int>", '\033[0m'
                 print '\033[0;33;40m', "/turtle setz <turtleName: string> <z: int>", '\033[0m'
                 print '\033[0;33;40m', "/turtle speed <turtleName: string> <turtlespeed: int>", '\033[0m'
+            elif page == 12:
                 print '\033[0;33;40m', "/turtle up <turtleName: string> <angle: float>", '\033[0m'
                 print '\033[0;33;40m', "/turtle walk <turtleName: string>", '\033[0m'
-            elif page == 12:
                 print '\033[0;34;40m', "/exit", '\033[0m'
             print '\033[0;32;40m', "Tip: " + '\033[0;33;40m' + "yellow" + '\033[0;32;40m' + " commands are add-ons' commands.", '\033[0m'
             print '\033[0;34;40m', "     " + "blue" + '\033[0;32;40m' + " commands are for function.", '\033[0m'
